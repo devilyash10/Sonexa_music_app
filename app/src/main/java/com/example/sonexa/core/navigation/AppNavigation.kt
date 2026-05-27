@@ -9,12 +9,11 @@ import com.example.sonexa.feature.player.PlayerScreen
 import com.example.sonexa.feature.search.SearchScreen
 import com.example.sonexa.model.Song
 import com.example.sonexa.model.fakeSongs
-import com.example.sonexa.core.navigation.Screen
 
 @Composable
 fun AppNavigation(
     navController: NavHostController,
-    currentSong: Song?, // 1. Update this to be nullable (Song?)
+    currentSong: Song?,
     onSongSelected: (Song) -> Unit
 ) {
     NavHost(
@@ -37,12 +36,32 @@ fun AppNavigation(
         }
 
         composable(Screen.Player.route) {
-            // 2. Safely unwrap currentSong.
-            // The user can only get here if they clicked a song, so it won't be null.
             if (currentSong != null) {
                 PlayerScreen(
                     song = currentSong,
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+
+                    // Logic to jump to the Next Song
+                    onNextClick = {
+                        val currentIndex = fakeSongs.indexOf(currentSong)
+                        if (currentIndex != -1) {
+                            // The modulo (%) operator ensures that if we are at the last song,
+                            // clicking "Next" loops back to the first song (index 0).
+                            val nextIndex = (currentIndex + 1) % fakeSongs.size
+                            onSongSelected(fakeSongs[nextIndex])
+                        }
+                    },
+
+                    // Logic to jump to the Previous Song
+                    onPreviousClick = {
+                        val currentIndex = fakeSongs.indexOf(currentSong)
+                        if (currentIndex != -1) {
+                            // Adding fakeSongs.size prevents the index from becoming a negative number
+                            // when we click "Previous" on the very first song.
+                            val prevIndex = (currentIndex - 1 + fakeSongs.size) % fakeSongs.size
+                            onSongSelected(fakeSongs[prevIndex])
+                        }
+                    }
                 )
             }
         }

@@ -22,7 +22,9 @@ import com.example.sonexa.model.Song
 @Composable
 fun PlayerScreen(
     song: Song, // Accept the song data
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    onNextClick: () -> Unit = {},     // 1. Add Next Callback
+    onPreviousClick: () -> Unit = {}  // 2. Add Previous Callback
 ) {
     var isPlaying by remember { mutableStateOf(false) }
     var sliderPosition by remember { mutableFloatStateOf(0.3f) }
@@ -119,7 +121,11 @@ fun PlayerScreen(
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 IconButton(onClick = { }) { Icon(Icons.Default.Shuffle, contentDescription = "Shuffle") }
-                IconButton(onClick = { }) { Icon(Icons.Rounded.SkipPrevious, contentDescription = "Skip Previous", modifier = Modifier.size(42.dp)) }
+
+                // 3. Connect the Previous button
+                IconButton(onClick = onPreviousClick) {
+                    Icon(Icons.Rounded.SkipPrevious, contentDescription = "Skip Previous", modifier = Modifier.size(42.dp))
+                }
 
                 Surface(
                     onClick = { isPlaying = !isPlaying },
@@ -134,7 +140,11 @@ fun PlayerScreen(
                     )
                 }
 
-                IconButton(onClick = { }) { Icon(Icons.Rounded.SkipNext, contentDescription = "Skip Next", modifier = Modifier.size(42.dp)) }
+                // 4. Connect the Next button
+                IconButton(onClick = onNextClick) {
+                    Icon(Icons.Rounded.SkipNext, contentDescription = "Skip Next", modifier = Modifier.size(42.dp))
+                }
+
                 IconButton(onClick = { }) { Icon(Icons.Default.Repeat, contentDescription = "Repeat") }
             }
 
