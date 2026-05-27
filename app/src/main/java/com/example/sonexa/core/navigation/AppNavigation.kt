@@ -18,13 +18,25 @@ fun AppNavigation(navController: NavHostController) {
             HomeScreen(
                 onSongClick = {
                     navController.navigate(Screen.Player.route)
+                },
+                // 4. Wire up the search route
+                onSearchClick = {
+                    navController.navigate(Screen.Search.route)
                 }
             )
         }
 
         composable(Screen.Player.route) {
-            PlayerScreen()
+            PlayerScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
         }
+
+//        composable(Screen.Player.route) {
+//            PlayerScreen()
+//        }
 
         composable(Screen.Search.route) {
             SearchScreen()

@@ -1,7 +1,6 @@
 package com.example.sonexa.feature.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,12 +14,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.sonexa.model.Song
 import com.example.sonexa.model.fakeSongs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onSongClick: (songTitle: String) -> Unit = {}
+    // 1. Pass data as a parameter so a ViewModel can supply it later
+    songs: List<Song> = fakeSongs,
+    onSongClick: (songTitle: String) -> Unit = {},
+    onSearchClick: () -> Unit = {} // Added search click listener
 ) {
     Scaffold(
         topBar = {
@@ -51,7 +54,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                ModernSearchBar()
+                ModernSearchBar(onClick = onSearchClick)
             }
 
             item {
@@ -66,7 +69,11 @@ fun HomeScreen(
                 )
             }
 
-            items(fakeSongs) { song ->
+            // 2. Added 'key' for production-level Compose performance
+            items(
+                items = songs,
+                key = { song -> song.id }
+            ) { song ->
                 SongCard(
                     title = song.title,
                     artist = song.artist,
@@ -79,8 +86,10 @@ fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ModernSearchBar() {
+private fun ModernSearchBar(onClick: () -> Unit) {
+    // 3. Using Material 3's clickable Card variant
     Card(
+        onClick = onClick,
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
@@ -94,7 +103,7 @@ private fun ModernSearchBar() {
         ) {
             Icon(
                 imageVector = Icons.Default.Search,
-                contentDescription = null,
+                contentDescription = "Search", // Improved accessibility
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
@@ -109,6 +118,7 @@ private fun ModernSearchBar() {
     }
 }
 
+// FeaturedCard remains exactly the same
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FeaturedCard() {
@@ -142,7 +152,7 @@ private fun FeaturedCard() {
             ) {
                 Icon(
                     imageVector = Icons.Default.Shuffle,
-                    contentDescription = null
+                    contentDescription = "Shuffle Play"
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Shuffle Play")
@@ -158,14 +168,14 @@ private fun SongCard(
     artist: String,
     onClick: () -> Unit
 ) {
+    // 3. Using Material 3's clickable Card variant here as well
     Card(
+        onClick = onClick,
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
