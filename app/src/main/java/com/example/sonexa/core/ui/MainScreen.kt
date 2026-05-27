@@ -16,7 +16,9 @@ import androidx.navigation.compose.rememberNavController
 import com.example.sonexa.core.navigation.AppNavigation
 import com.example.sonexa.core.navigation.Screen
 import com.example.sonexa.feature.player.MiniPlayer
-import com.example.sonexa.model.fakeSongs
+
+// ... (Keep your other imports)
+import com.example.sonexa.model.Song // Make sure you import Song, NOT fakeSongs anymore
 
 @Composable
 fun MainScreen() {
@@ -26,19 +28,21 @@ fun MainScreen() {
     val currentRoute = navBackStackEntry?.destination?.route
     val showBottomBar = currentRoute != Screen.Player.route
 
-    // --- STATE HOISTING ---
-    // The master screen remembers which song is playing.
-    // Default to the first song in the fake list.
-    var currentSong by remember { mutableStateOf(fakeSongs[0]) }
+    // 1. Make the state nullable (Song?) and default to null
+    var currentSong by remember { mutableStateOf<Song?>(null) }
 
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
                 Column {
-                    MiniPlayer(
-                        song = currentSong, // Pass data down
-                        onNavigateToPlayer = { navController.navigate(Screen.Player.route) }
-                    )
+                    // 2. Only show the MiniPlayer if currentSong is NOT null
+                    currentSong?.let { song ->
+                        MiniPlayer(
+                            song = song,
+                            onNavigateToPlayer = { navController.navigate(Screen.Player.route) }
+                        )
+                    }
+
                     BottomNavigationBar(navController = navController, currentRoute = currentRoute)
                 }
             }
@@ -47,14 +51,16 @@ fun MainScreen() {
         Surface(modifier = Modifier.padding(innerPadding)) {
             AppNavigation(
                 navController = navController,
-                currentSong = currentSong, // Pass data down
+                currentSong = currentSong,
                 onSongSelected = { newSong ->
-                    currentSong = newSong // Update the state when a user clicks a song
+                    currentSong = newSong
                 }
             )
         }
     }
 }
+
+// ... (Keep BottomNavigationBar exactly as it is)
 
 @Composable
 private fun BottomNavigationBar(

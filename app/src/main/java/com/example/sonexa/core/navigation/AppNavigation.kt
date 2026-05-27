@@ -9,12 +9,13 @@ import com.example.sonexa.feature.player.PlayerScreen
 import com.example.sonexa.feature.search.SearchScreen
 import com.example.sonexa.model.Song
 import com.example.sonexa.model.fakeSongs
+import com.example.sonexa.core.navigation.Screen
 
 @Composable
 fun AppNavigation(
     navController: NavHostController,
-    currentSong: Song, // Receive the current song
-    onSongSelected: (Song) -> Unit // Callback when a new song is picked
+    currentSong: Song?, // 1. Update this to be nullable (Song?)
+    onSongSelected: (Song) -> Unit
 ) {
     NavHost(
         navController = navController,
@@ -23,10 +24,9 @@ fun AppNavigation(
         composable(Screen.Home.route) {
             HomeScreen(
                 onSongClick = { songTitle ->
-                    // Find the song that was clicked
                     val selectedSong = fakeSongs.find { it.title == songTitle }
                     if (selectedSong != null) {
-                        onSongSelected(selectedSong) // Update the global state
+                        onSongSelected(selectedSong)
                         navController.navigate(Screen.Player.route)
                     }
                 },
@@ -37,11 +37,14 @@ fun AppNavigation(
         }
 
         composable(Screen.Player.route) {
-            // Pass the dynamic song data to the PlayerScreen
-            PlayerScreen(
-                song = currentSong,
-                onBackClick = { navController.popBackStack() }
-            )
+            // 2. Safely unwrap currentSong.
+            // The user can only get here if they clicked a song, so it won't be null.
+            if (currentSong != null) {
+                PlayerScreen(
+                    song = currentSong,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
         }
 
         composable(Screen.Search.route) {
