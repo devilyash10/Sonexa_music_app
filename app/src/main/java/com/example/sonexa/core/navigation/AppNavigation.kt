@@ -14,12 +14,13 @@ fun AppNavigation(navController: NavHostController) {
         navController = navController,
         startDestination = Screen.Home.route
     ) {
+        // In AppNavigation.kt
         composable(Screen.Home.route) {
             HomeScreen(
                 onSongClick = {
+                    // We can still navigate from a specific song in the list
                     navController.navigate(Screen.Player.route)
                 },
-                // 4. Wire up the search route
                 onSearchClick = {
                     navController.navigate(Screen.Search.route)
                 }
