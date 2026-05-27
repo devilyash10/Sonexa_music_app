@@ -8,13 +8,24 @@ import com.example.sonexa.feature.home.HomeScreen
 import com.example.sonexa.feature.player.PlayerScreen
 import com.example.sonexa.feature.search.SearchScreen
 import com.example.sonexa.model.Song
-import com.example.sonexa.model.fakeSongs
+// IMPORTANT: Remove the import for fakeSongs!
 
 @Composable
 fun AppNavigation(
     navController: NavHostController,
     currentSong: Song?,
-    onSongSelected: (Song) -> Unit
+    songs: List<Song>,
+
+    // Accept new states
+    isPlaying: Boolean,
+    currentPosition: Long,
+    totalDuration: Long,
+
+    onSongSelected: (Song) -> Unit,
+    onPermissionGranted: () -> Unit,
+    onPauseClick: () -> Unit,
+    onResumeClick: () -> Unit,
+    onSeek: (Long) -> Unit // Accept seek command
 ) {
     NavHost(
         navController = navController,
@@ -22,16 +33,17 @@ fun AppNavigation(
     ) {
         composable(Screen.Home.route) {
             HomeScreen(
+                songs = songs, // Pass the real songs to the UI
                 onSongClick = { songTitle ->
-                    val selectedSong = fakeSongs.find { it.title == songTitle }
+                    // Search the REAL list for the clicked song
+                    val selectedSong = songs.find { it.title == songTitle }
                     if (selectedSong != null) {
                         onSongSelected(selectedSong)
                         navController.navigate(Screen.Player.route)
                     }
                 },
-                onSearchClick = {
-                    navController.navigate(Screen.Search.route)
-                }
+                onSearchClick = { navController.navigate(Screen.Search.route) },
+                onPermissionGranted = onPermissionGranted // Wire up the callback
             )
         }
 
@@ -39,29 +51,34 @@ fun AppNavigation(
             if (currentSong != null) {
                 PlayerScreen(
                     song = currentSong,
-                    onBackClick = { navController.popBackStack() },
 
-                    // Logic to jump to the Next Song
+                    // Pass the real ExoPlayer data directly into the UI
+                    isPlaying = isPlaying,
+                    currentPosition = currentPosition,
+                    totalDuration = totalDuration,
+
+                    onBackClick = { navController.popBackStack() },
+                    onPauseClick = onPauseClick,
+                    onResumeClick = onResumeClick,
+
+                    // Notice how Next/Previous just call onSongSelected?
+                    // Because we updated onSongSelected in MainScreen to call homeViewModel.playSong(),
+                    // clicking Next will automatically play the next song!
                     onNextClick = {
-                        val currentIndex = fakeSongs.indexOf(currentSong)
-                        if (currentIndex != -1) {
-                            // The modulo (%) operator ensures that if we are at the last song,
-                            // clicking "Next" loops back to the first song (index 0).
-                            val nextIndex = (currentIndex + 1) % fakeSongs.size
-                            onSongSelected(fakeSongs[nextIndex])
+                        val currentIndex = songs.indexOf(currentSong)
+                        if (currentIndex != -1 && songs.isNotEmpty()) {
+                            val nextIndex = (currentIndex + 1) % songs.size
+                            onSongSelected(songs[nextIndex])
                         }
                     },
-
-                    // Logic to jump to the Previous Song
                     onPreviousClick = {
-                        val currentIndex = fakeSongs.indexOf(currentSong)
-                        if (currentIndex != -1) {
-                            // Adding fakeSongs.size prevents the index from becoming a negative number
-                            // when we click "Previous" on the very first song.
-                            val prevIndex = (currentIndex - 1 + fakeSongs.size) % fakeSongs.size
-                            onSongSelected(fakeSongs[prevIndex])
+                        val currentIndex = songs.indexOf(currentSong)
+                        if (currentIndex != -1 && songs.isNotEmpty()) {
+                            val prevIndex = (currentIndex - 1 + songs.size) % songs.size
+                            onSongSelected(songs[prevIndex])
                         }
-                    }
+                    },
+                    onSeek = onSeek // Wire up the callback
                 )
             }
         }

@@ -28,25 +28,33 @@ import com.example.sonexa.model.fakeSongs
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    songs: List<Song> = fakeSongs,
+    songs: List<Song>, // No longer defaults to fakeSongs
     onSongClick: (songTitle: String) -> Unit = {},
-    onSearchClick: () -> Unit = {}
+    onSearchClick: () -> Unit = {},
+    onPermissionGranted: () -> Unit = {} // NEW: Callback to trigger data fetch
 ) {
     val context = LocalContext.current
     val permissionToRequest = PermissionUtils.audioPermission
 
-    // 1. Check if we ALREADY have the permission
     var hasPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, permissionToRequest) == PackageManager.PERMISSION_GRANTED
-        )
+        mutableStateOf(ContextCompat.checkSelfPermission(context, permissionToRequest) == PackageManager.PERMISSION_GRANTED)
     }
 
-    // 2. Create the launcher to REQUEST the permission
+    // NEW: If we ALREADY have permission when the screen opens, fetch the songs immediately.
+    LaunchedEffect(hasPermission) {
+        if (hasPermission) {
+            onPermissionGranted()
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
             hasPermission = isGranted
+            // NEW: If the user just clicked "Allow", fetch the songs!
+            if (isGranted) {
+                onPermissionGranted()
+            }
         }
     )
 

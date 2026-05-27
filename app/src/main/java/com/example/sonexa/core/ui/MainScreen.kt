@@ -9,40 +9,47 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.sonexa.core.navigation.AppNavigation
 import com.example.sonexa.core.navigation.Screen
+import com.example.sonexa.feature.home.HomeViewModel
 import com.example.sonexa.feature.player.MiniPlayer
-
-// ... (Keep your other imports)
-import com.example.sonexa.model.Song // Make sure you import Song, NOT fakeSongs anymore
+import com.example.sonexa.model.Song
 
 @Composable
-fun MainScreen() {
+fun MainScreen(
+    homeViewModel: HomeViewModel = viewModel()
+) {
     val navController = rememberNavController()
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val showBottomBar = currentRoute != Screen.Player.route
 
-    // 1. Make the state nullable (Song?) and default to null
+    // 1. Collect the real lists and states from the ViewModel
+    val songs by homeViewModel.songs.collectAsState()
+    val isPlaying by homeViewModel.isPlaying.collectAsState()
+    val currentPosition by homeViewModel.currentPosition.collectAsState()
+    val totalDuration by homeViewModel.totalDuration.collectAsState()
+
+    // THIS IS THE LINE THAT WAS MISSING!
+    // It keeps track of which song is currently active.
     var currentSong by remember { mutableStateOf<Song?>(null) }
 
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
                 Column {
-                    // 2. Only show the MiniPlayer if currentSong is NOT null
                     currentSong?.let { song ->
                         MiniPlayer(
                             song = song,
                             onNavigateToPlayer = { navController.navigate(Screen.Player.route) }
                         )
                     }
-
                     BottomNavigationBar(navController = navController, currentRoute = currentRoute)
                 }
             }
@@ -52,22 +59,28 @@ fun MainScreen() {
             AppNavigation(
                 navController = navController,
                 currentSong = currentSong,
+                songs = songs,
+                isPlaying = isPlaying,
+                currentPosition = currentPosition,
+                totalDuration = totalDuration,
                 onSongSelected = { newSong ->
                     currentSong = newSong
-                }
+                    homeViewModel.playSong(newSong)
+                },
+                onPermissionGranted = { homeViewModel.loadLocalAudioFiles() },
+                onPauseClick = { homeViewModel.pauseSong() },
+                onResumeClick = { homeViewModel.resumeSong() },
+                onSeek = { position -> homeViewModel.seekTo(position) }
             )
         }
     }
 }
-
-// ... (Keep BottomNavigationBar exactly as it is)
 
 @Composable
 private fun BottomNavigationBar(
     navController: NavHostController,
     currentRoute: String?
 ) {
-    // Removed the forced .height(72.dp) so the items don't overflow!
     NavigationBar(
         tonalElevation = 8.dp
     ) {

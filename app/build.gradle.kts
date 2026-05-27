@@ -58,7 +58,14 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     // Compose Navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
+    // ViewModel Compose
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 
     // Material 3 (Usually included by default in new Android Studio projects, but verify)
     //implementation("androidx.compose.material3:material3:1.2.1")
+
+    // AndroidX Media3 (ExoPlayer & MediaSession)
+    val media3Version = "1.3.1" // Use the latest stable version
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-session:$media3Version")
 }

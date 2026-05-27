@@ -9,7 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,13 +21,21 @@ import com.example.sonexa.model.Song
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
-    song: Song, // Accept the song data
+    song: Song,
+
+    // 1. Receive the REAL state from ExoPlayer
+    isPlaying: Boolean,
+    currentPosition: Long,
+    totalDuration: Long,
+
     onBackClick: () -> Unit = {},
-    onNextClick: () -> Unit = {},     // 1. Add Next Callback
-    onPreviousClick: () -> Unit = {}  // 2. Add Previous Callback
+    onNextClick: () -> Unit = {},
+    onPreviousClick: () -> Unit = {},
+    onPauseClick: () -> Unit = {},
+    onResumeClick: () -> Unit = {},
+    onSeek: (Long) -> Unit = {} // 2. Receive the seek action
 ) {
-    var isPlaying by remember { mutableStateOf(false) }
-    var sliderPosition by remember { mutableFloatStateOf(0.3f) }
+    // Look! No fake states or coroutine timers! The UI is completely dumb and clean.
     val scrollState = rememberScrollState() // Added to prevent overlap
 
     Scaffold(
@@ -95,8 +103,12 @@ fun PlayerScreen(
             // 3. Progress Bar (Slider)
             Column {
                 Slider(
-                    value = sliderPosition,
-                    onValueChange = { sliderPosition = it },
+                    // Calculate percentage (protect against divide by zero)
+                    value = if (totalDuration > 0) currentPosition.toFloat() / totalDuration.toFloat() else 0f,
+                    onValueChange = { newPercent ->
+                        // Tell the ViewModel where the user dragged the slider
+                        onSeek((newPercent * totalDuration).toLong())
+                    },
                     colors = SliderDefaults.colors(
                         thumbColor = MaterialTheme.colorScheme.primary,
                         activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -107,48 +119,52 @@ fun PlayerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("1:24", style = MaterialTheme.typography.labelSmall)
-                    Text("3:50", style = MaterialTheme.typography.labelSmall)
+                    // 4. Use the new Millisecond formatter
+                    Text(formatTime(currentPosition), style = MaterialTheme.typography.labelSmall)
+                    Text(formatTime(totalDuration), style = MaterialTheme.typography.labelSmall)
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 4. Playback Controls
+            // 5. Playback Controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 IconButton(onClick = { }) { Icon(Icons.Default.Shuffle, contentDescription = "Shuffle") }
-
-                // 3. Connect the Previous button
-                IconButton(onClick = onPreviousClick) {
-                    Icon(Icons.Rounded.SkipPrevious, contentDescription = "Skip Previous", modifier = Modifier.size(42.dp))
-                }
+                IconButton(onClick = onPreviousClick) { Icon(Icons.Rounded.SkipPrevious, contentDescription = "Skip Previous", modifier = Modifier.size(42.dp)) }
 
                 Surface(
-                    onClick = { isPlaying = !isPlaying },
+                    onClick = {
+                        if (isPlaying) onPauseClick() else onResumeClick()
+                    },
                     shape = RoundedCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 ) {
                     Icon(
+                        // UI automatically flips based on the real ExoPlayer state!
                         imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = "Play/Pause",
                         modifier = Modifier.padding(20.dp).size(40.dp)
                     )
                 }
 
-                // 4. Connect the Next button
-                IconButton(onClick = onNextClick) {
-                    Icon(Icons.Rounded.SkipNext, contentDescription = "Skip Next", modifier = Modifier.size(42.dp))
-                }
-
+                IconButton(onClick = onNextClick) { Icon(Icons.Rounded.SkipNext, contentDescription = "Skip Next", modifier = Modifier.size(42.dp)) }
                 IconButton(onClick = { }) { Icon(Icons.Default.Repeat, contentDescription = "Repeat") }
             }
 
             Spacer(modifier = Modifier.height(48.dp))
         }
     }
+}
+
+// 6. Helper function to format Milliseconds (Long) into MM:SS
+private fun formatTime(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val remainingSeconds = totalSeconds % 60
+    return "$minutes:${remainingSeconds.toString().padStart(2, '0')}"
 }
