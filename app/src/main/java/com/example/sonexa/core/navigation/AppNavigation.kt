@@ -7,19 +7,28 @@ import androidx.navigation.compose.composable
 import com.example.sonexa.feature.home.HomeScreen
 import com.example.sonexa.feature.player.PlayerScreen
 import com.example.sonexa.feature.search.SearchScreen
+import com.example.sonexa.model.Song
+import com.example.sonexa.model.fakeSongs
 
 @Composable
-fun AppNavigation(navController: NavHostController) {
+fun AppNavigation(
+    navController: NavHostController,
+    currentSong: Song, // Receive the current song
+    onSongSelected: (Song) -> Unit // Callback when a new song is picked
+) {
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route
     ) {
-        // In AppNavigation.kt
         composable(Screen.Home.route) {
             HomeScreen(
-                onSongClick = {
-                    // We can still navigate from a specific song in the list
-                    navController.navigate(Screen.Player.route)
+                onSongClick = { songTitle ->
+                    // Find the song that was clicked
+                    val selectedSong = fakeSongs.find { it.title == songTitle }
+                    if (selectedSong != null) {
+                        onSongSelected(selectedSong) // Update the global state
+                        navController.navigate(Screen.Player.route)
+                    }
                 },
                 onSearchClick = {
                     navController.navigate(Screen.Search.route)
@@ -28,16 +37,12 @@ fun AppNavigation(navController: NavHostController) {
         }
 
         composable(Screen.Player.route) {
+            // Pass the dynamic song data to the PlayerScreen
             PlayerScreen(
-                onBackClick = {
-                    navController.popBackStack()
-                }
+                song = currentSong,
+                onBackClick = { navController.popBackStack() }
             )
         }
-
-//        composable(Screen.Player.route) {
-//            PlayerScreen()
-//        }
 
         composable(Screen.Search.route) {
             SearchScreen()
