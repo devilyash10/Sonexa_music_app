@@ -1,89 +1,138 @@
 package com.example.sonexa.feature.home
 
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.example.sonexa.core.util.PermissionUtils
 import com.example.sonexa.model.Song
 import com.example.sonexa.model.fakeSongs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    // 1. Pass data as a parameter so a ViewModel can supply it later
     songs: List<Song> = fakeSongs,
     onSongClick: (songTitle: String) -> Unit = {},
-    onSearchClick: () -> Unit = {} // Added search click listener
+    onSearchClick: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val permissionToRequest = PermissionUtils.audioPermission
+
+    // 1. Check if we ALREADY have the permission
+    var hasPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, permissionToRequest) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    // 2. Create the launcher to REQUEST the permission
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            hasPermission = isGranted
+        }
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text(
-                            text = "Sonexa",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Your music, beautifully organized",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text("Sonexa", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("Your music, beautifully organized", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             )
         }
     ) { paddingValues ->
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                ModernSearchBar(onClick = onSearchClick)
+        // 3. Show different UI based on permission state
+        if (hasPermission) {
+            // Permission GRANTED: Show the actual list of songs
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item { ModernSearchBar(onClick = onSearchClick) }
+                item { FeaturedCard() }
+                item { Text("Your Songs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
+                items(items = songs, key = { it.id }) { song ->
+                    SongCard(title = song.title, artist = song.artist, onClick = { onSongClick(song.title) })
+                }
             }
-
-            item {
-                FeaturedCard()
-            }
-
-            item {
-                Text(
-                    text = "Your Songs",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            // 2. Added 'key' for production-level Compose performance
-            items(
-                items = songs,
-                key = { song -> song.id }
-            ) { song ->
-                SongCard(
-                    title = song.title,
-                    artist = song.artist,
-                    onClick = { onSongClick(song.title) }
-                )
-            }
+        } else {
+            // Permission DENIED/NOT ASKED YET: Show a prompt
+            PermissionPrompt(
+                modifier = Modifier.padding(paddingValues),
+                onRequestClick = { permissionLauncher.launch(permissionToRequest) }
+            )
         }
     }
 }
 
+// 4. A clean, beautiful UI prompting the user for access
+@Composable
+private fun PermissionPrompt(
+    modifier: Modifier = Modifier,
+    onRequestClick: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Default.LibraryMusic,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "Music Access Required",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Sonexa needs access to your device's storage to find and play your favorite local audio files.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(
+            onClick = onRequestClick,
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text("Grant Permission", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        }
+    }
+}
+
+// ... Keep ModernSearchBar, FeaturedCard, and SongCard EXACTLY as they are ...
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ModernSearchBar(onClick: () -> Unit) {
