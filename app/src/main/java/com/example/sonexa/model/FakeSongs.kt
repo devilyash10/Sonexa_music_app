@@ -2,9 +2,9 @@
 package com.example.sonexa.model
 
 val fakeSongs = listOf(
-    Song(1, "Blinding Lights", "The Weeknd"),
-    Song(2, "Starboy", "The Weeknd"),
-    Song(3, "Believer", "Imagine Dragons"),
-    Song(4, "Levitating", "Dua Lipa"),
-    Song(5, "Faded", "Alan Walker")
+    Song(1L, "Blinding Lights", "The Weeknd", ""),
+    Song(2L, "Starboy", "The Weeknd", ""),
+    Song(3L, "Believer", "Imagine Dragons", ""),
+    Song(4L, "Levitating", "Dua Lipa",""),
+    Song(5L, "Faded", "Alan Walker", "")
 )
