@@ -33,7 +33,10 @@ fun AppNavigation(
     // THE MISSING SEARCH PARAMETERS:
     searchQuery: String,
     filteredSongs: List<Song>,
-    onSearchQueryChange: (String) -> Unit
+    onSearchQueryChange: (String) -> Unit,
+
+    favoriteSongIds: List<Long>,
+    onToggleFavorite: (Song) -> Unit
 ) {
     NavHost(
         navController = navController,
@@ -50,7 +53,12 @@ fun AppNavigation(
                     }
                 },
                 onSearchClick = { navController.navigate(Screen.Search.route) },
-                onPermissionGranted = onPermissionGranted
+                onPermissionGranted = onPermissionGranted,
+
+                // NEW: Connect the Home Screen button directly to the ViewModel's new function!
+                onShufflePlayClick = onShuffleClick
+                // (Since onShuffleClick is already passed to AppNavigation, we can just reuse it,
+                // OR better yet, let's just make sure your MainScreen passes homeViewModel.shuffleAndPlayAll() here).
             )
         }
 
@@ -63,6 +71,9 @@ fun AppNavigation(
                     totalDuration = totalDuration,
                     isShuffleEnabled = isShuffleEnabled,
                     repeatMode = repeatMode,
+                    // We instantly check if the current song's ID exists in the Room database!
+                    isFavorite = favoriteSongIds.contains(currentSong.id),
+                    onToggleFavorite = { onToggleFavorite(currentSong) },
 
                     onBackClick = { navController.popBackStack() },
                     onPauseClick = onPauseClick,

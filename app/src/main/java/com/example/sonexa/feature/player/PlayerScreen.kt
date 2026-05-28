@@ -33,6 +33,8 @@ fun PlayerScreen(
     // NEW STATES: Added for Epic 1
     isShuffleEnabled: Boolean,
     repeatMode: Int,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
 
     onBackClick: () -> Unit = {},
     onNextClick: () -> Unit = {},
@@ -98,26 +100,52 @@ fun PlayerScreen(
                 )
             }
 
-            // 2. Dynamic Song Info
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.Start
+            // 2. Dynamic Song Info & Favorite Button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp), // Slight padding to align with album art
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = song.title,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = song.artist,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // The Text gets weight(1f) to push the Heart to the right edge
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text(
+                        text = song.title,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = song.artist,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp)) // Buffer between text and icon
+
+                // The Premium Heart Button
+                IconButton(
+                    onClick = onToggleFavorite,
+                    modifier = Modifier.size(48.dp) // Larger touch target
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        modifier = Modifier.size(32.dp),
+                        tint = if (isFavorite) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
 
             // 3. Progress Bar (Slider)
             Column {

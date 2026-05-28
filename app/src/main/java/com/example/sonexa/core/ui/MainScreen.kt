@@ -1,7 +1,9 @@
 package com.example.sonexa.core.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
@@ -44,16 +46,16 @@ fun MainScreen(
     // We don't need it anymore, the ViewModel dictates the truth!
     val searchQuery by homeViewModel.searchQuery.collectAsState()
     val filteredSongs by homeViewModel.filteredSongs.collectAsState()
-
+    val favoriteSongIds by homeViewModel.favoriteSongIds.collectAsState()
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
-                Column {
+                // Removing default spaces to make it flush
+                Column(modifier = Modifier.fillMaxWidth()) {
                     currentSong?.let { song ->
                         MiniPlayer(
                             song = song,
                             isPlaying = isPlaying,
-                            // ADD THESE TWO LINES SO THE PROGRESS BAR MOVES:
                             currentPosition = currentPosition,
                             totalDuration = totalDuration,
                             onNavigateToPlayer = { navController.navigate(Screen.Player.route) },
@@ -67,7 +69,10 @@ fun MainScreen(
             }
         }
     ) { innerPadding ->
-        Surface(modifier = Modifier.padding(innerPadding)) {
+        Surface(
+            modifier = Modifier.padding(innerPadding),
+            color = MaterialTheme.colorScheme.background // Explicit background color
+        ) {
             AppNavigation(
                 navController = navController,
                 currentSong = currentSong,
@@ -93,7 +98,11 @@ fun MainScreen(
                 onPreviousClick = { homeViewModel.skipToPrevious() },
                 searchQuery = searchQuery,
                 filteredSongs = filteredSongs,
-                onSearchQueryChange = { newText -> homeViewModel.updateSearchQuery(newText) }
+                onSearchQueryChange = { newText -> homeViewModel.updateSearchQuery(newText) },
+
+                // ADD THESE TWO FOR FAVORITES:
+                favoriteSongIds = favoriteSongIds,
+                onToggleFavorite = { songToLike -> homeViewModel.toggleFavorite(songToLike) }
 
             )
         }
@@ -107,25 +116,24 @@ private fun BottomNavigationBar(
 ) {
     NavigationBar(
         tonalElevation = 8.dp
+        // 🚨 REMOVED: modifier = Modifier.height(60.dp)
+        // This was the exact line crushing your icons against the system nav bar!
     ) {
         NavigationBarItem(
             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-            label = { Text("Home") },
             selected = currentRoute == Screen.Home.route,
+            alwaysShowLabel = false,
             onClick = {
-                // FIXED NAV BUG: This explicitly clears the backstack up to Home
                 navController.navigate(Screen.Home.route) {
-                    popUpTo(Screen.Home.route) {
-                        inclusive = false
-                    }
+                    popUpTo(Screen.Home.route) { inclusive = false }
                     launchSingleTop = true
                 }
             }
         )
         NavigationBarItem(
             icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-            label = { Text("Search") },
             selected = currentRoute == Screen.Search.route,
+            alwaysShowLabel = false,
             onClick = {
                 navController.navigate(Screen.Search.route) {
                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }

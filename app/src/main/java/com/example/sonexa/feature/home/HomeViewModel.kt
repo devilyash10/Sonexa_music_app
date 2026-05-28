@@ -15,6 +15,8 @@ import androidx.media3.common.Player
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import com.example.sonexa.data.local.FavoriteSongEntity
+import com.example.sonexa.data.local.SonexaDatabase
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -23,8 +25,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // 1. Initialize our new remote control
     private val audioController = AudioController(application)
 
+    // 1. INITIALIZE THE DATABASE DAO
+    private val favoriteDao = SonexaDatabase.getDatabase(application).favoriteDao()
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
+
+    // 2. NEW STATE: A list of all liked song IDs.
+    // Because Room returns a Flow, this will automatically update the UI whenever the database changes!
+    val favoriteSongIds: StateFlow<List<Long>> = favoriteDao.getAllFavoriteSongIds()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     // 1. NEW: Hold the current text the user is typing
     private val _searchQuery = MutableStateFlow("")
@@ -139,9 +148,37 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun skipToNext() = audioController.skipToNext()
     fun skipToPrevious() = audioController.skipToPrevious()
 
+    // 3. NEW FUNCTIONS: The UI will call this when the user clicks the Heart icon
+    fun toggleFavorite(song: Song) {
+        viewModelScope.launch {
+            val isCurrentlyFavorite = favoriteSongIds.value.contains(song.id)
+            val entity = FavoriteSongEntity(songId = song.id)
+
+            if (isCurrentlyFavorite) {
+                // If it's already liked, remove it
+                favoriteDao.deleteFavorite(entity)
+            } else {
+                // If it's not liked, add it
+                favoriteDao.insertFavorite(entity)
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         // 3. Clean up the connection when the ViewModel dies
         audioController.release()
+    }
+    // NEW: Kickstart a shuffled playlist from the Home Screen
+    fun shuffleAndPlayAll() {
+        val currentList = _songs.value
+        if (currentList.isNotEmpty()) {
+            // 1. Force ExoPlayer's shuffle mode ON
+            if (!_isShuffleEnabled.value) {
+                toggleShuffle()
+            }
+            // 2. Pick a random song to start the queue
+            playSong(currentList.random())
+        }
     }
 }

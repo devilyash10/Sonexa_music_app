@@ -37,7 +37,8 @@ fun HomeScreen(
     songs: List<Song>,
     onSongClick: (songTitle: String) -> Unit = {},
     onSearchClick: () -> Unit = {},
-    onPermissionGranted: () -> Unit = {}
+    onPermissionGranted: () -> Unit = {},
+    onShufflePlayClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val permissionToRequest = PermissionUtils.audioPermission
@@ -79,12 +80,16 @@ fun HomeScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues),
-                contentPadding = PaddingValues(16.dp),
+                    .padding(paddingValues), // This ALREADY perfectly avoids the bottom bar!
+
+                // FIXED: Reverted back to 16.dp to remove the massive empty gap
+                contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 0.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item { ModernSearchBar(onClick = onSearchClick) }
-                item { FeaturedCard() }
+
+                // PASS THE CLICK DOWN:
+                item { FeaturedCard(onShufflePlayClick = onShufflePlayClick) }
                 item { Text("Your Songs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
 
                 // 1. We now pass the WHOLE song object to SongItem so it can access the artworkUri
@@ -175,7 +180,7 @@ private fun ModernSearchBar(onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FeaturedCard() {
+private fun FeaturedCard(onShufflePlayClick: () -> Unit) {
     Card(
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
@@ -199,13 +204,10 @@ private fun FeaturedCard() {
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
             FilledTonalButton(
-                onClick = { },
+                onClick = onShufflePlayClick, // ADDED THE ACTION HERE
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Shuffle,
-                    contentDescription = "Shuffle Play"
-                )
+                Icon(Icons.Default.Shuffle, contentDescription = "Shuffle Play")
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Shuffle Play")
             }

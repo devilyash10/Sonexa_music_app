@@ -2,117 +2,78 @@ package com.example.sonexa.core.media
 
 import android.content.ComponentName
 import android.content.Context
-import androidx.core.content.ContextCompat
+import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.sonexa.model.Song
-import com.example.sonexa.service.AudioService
+import com.example.sonexa.service.AudioService // Importing your existing service!
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 
+class AudioController(private val context: Context) {
 
-class AudioController(context: Context) {
-
-    private var mediaControllerFuture: ListenableFuture<MediaController>
+    // 1. We replace ExoPlayer with a MediaController (The Remote Control)
+    private var mediaControllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
 
     init {
-        // 1. Create a token that points to our AudioService
-        val sessionToken = SessionToken(context, ComponentName(context, AudioService::class.java))
-
-        // 2. Request a connection to the service asynchronously
-        mediaControllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
-
-        // 3. When the connection is successful, store the controller
-        mediaControllerFuture.addListener(
-            { mediaController = mediaControllerFuture.get() },
-            MoreExecutors.directExecutor()
-        )
+        initController()
     }
 
-    // --- PLAYBACK COMMANDS ---
+    private fun initController() {
+        // 2. We connect the Remote Control to the AudioService
+        val sessionToken = SessionToken(context, ComponentName(context, AudioService::class.java))
+        mediaControllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
+
+        // Wait for the connection to succeed
+        mediaControllerFuture?.addListener({
+            mediaController = mediaControllerFuture?.get()
+        }, MoreExecutors.directExecutor())
+    }
 
     fun playQueue(songs: List<Song>, startIndex: Int) {
+        // 3. We convert our Song data into ExoPlayer MediaItems AND Metadata
         val mediaItems = songs.map { song ->
-            val mediaMetadata = MediaMetadata.Builder()
-                .setTitle(song.title)
-                .setArtist(song.artist)
-                .build()
-
             MediaItem.Builder()
                 .setMediaId(song.id.toString())
                 .setUri(song.mediaUri)
-                .setMediaMetadata(mediaMetadata)
+                // THIS METADATA BUILDS THE LOCK SCREEN NOTIFICATION!
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(song.title)
+                        .setArtist(song.artist)
+                        .setArtworkUri(Uri.parse(song.artworkUri))
+                        .build()
+                )
                 .build()
         }
 
-        mediaController?.let { controller ->
-            // Give ExoPlayer the whole list, tell it where to start, and start at 0:00
-            controller.setMediaItems(mediaItems, startIndex, 0L)
-            controller.prepare()
-            controller.play()
-        }
-    }
-
-    fun pause() {
-        mediaController?.pause()
-    }
-
-    fun resume() {
+        mediaController?.setMediaItems(mediaItems, startIndex, 0)
+        mediaController?.prepare()
         mediaController?.play()
     }
 
-    fun skipToNext() {
-        mediaController?.seekToNextMediaItem()
-    }
+    // All these methods now safely send commands to the background service!
+    fun pause() = mediaController?.pause()
+    fun resume() = mediaController?.play()
+    fun skipToNext() = mediaController?.seekToNextMediaItem()
+    fun skipToPrevious() = mediaController?.seekToPreviousMediaItem()
+    fun seekTo(position: Long) = mediaController?.seekTo(position)
+    fun toggleShuffle(enabled: Boolean) { mediaController?.shuffleModeEnabled = enabled }
+    fun setRepeatMode(mode: Int) { mediaController?.repeatMode = mode }
 
-    fun skipToPrevious() {
-        mediaController?.seekToPreviousMediaItem()
-    }
-    // 2. ADD THESE NEW QUEUE METHODS AT THE BOTTOM
-    fun toggleShuffle(enabled: Boolean) {
-        mediaController?.shuffleModeEnabled = enabled
-    }
+    fun isPlaying() = mediaController?.isPlaying ?: false
+    fun getCurrentPosition() = mediaController?.currentPosition ?: 0L
+    fun getDuration() = mediaController?.duration?.coerceAtLeast(0L) ?: 0L
+    fun isShuffleEnabled() = mediaController?.shuffleModeEnabled ?: false
+    fun getRepeatMode() = mediaController?.repeatMode ?: Player.REPEAT_MODE_OFF
+    fun getCurrentMediaId() = mediaController?.currentMediaItem?.mediaId
 
-    fun setRepeatMode(repeatMode: Int) {
-        // repeatMode uses Player.REPEAT_MODE_OFF, REPEAT_MODE_ALL, or REPEAT_MODE_ONE
-        mediaController?.repeatMode = repeatMode
-    }
-
-    fun getCurrentMediaId(): String? {
-        // This tells us exactly which song ExoPlayer is currently playing
-        return mediaController?.currentMediaItem?.mediaId
-    }
-
-    fun isShuffleEnabled(): Boolean {
-        return mediaController?.shuffleModeEnabled ?: false
-    }
-
-    fun getRepeatMode(): Int {
-        return mediaController?.repeatMode ?: Player.REPEAT_MODE_OFF
-    }
-    // --- NEW GETTERS AND SEEKER ---
-
-    fun isPlaying(): Boolean {
-        return mediaController?.isPlaying ?: false
-    }
-
-    fun getCurrentPosition(): Long {
-        return mediaController?.currentPosition ?: 0L
-    }
-
-    fun getDuration(): Long {
-        return mediaController?.duration?.coerceAtLeast(0L) ?: 0L
-    }
-
-    fun seekTo(position: Long) {
-        mediaController?.seekTo(position)
-    }
-    // Clean up to prevent memory leaks when the app is completely closed
     fun release() {
-        MediaController.releaseFuture(mediaControllerFuture)
+        mediaControllerFuture?.let { MediaController.releaseFuture(it) }
+        mediaController = null
     }
 }
