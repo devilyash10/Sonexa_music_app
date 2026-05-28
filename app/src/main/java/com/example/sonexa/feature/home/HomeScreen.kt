@@ -4,34 +4,40 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import coil.compose.AsyncImage
 import com.example.sonexa.core.util.PermissionUtils
 import com.example.sonexa.model.Song
-import com.example.sonexa.model.fakeSongs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    songs: List<Song>, // No longer defaults to fakeSongs
+    songs: List<Song>,
     onSongClick: (songTitle: String) -> Unit = {},
     onSearchClick: () -> Unit = {},
-    onPermissionGranted: () -> Unit = {} // NEW: Callback to trigger data fetch
+    onPermissionGranted: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val permissionToRequest = PermissionUtils.audioPermission
@@ -40,7 +46,6 @@ fun HomeScreen(
         mutableStateOf(ContextCompat.checkSelfPermission(context, permissionToRequest) == PackageManager.PERMISSION_GRANTED)
     }
 
-    // NEW: If we ALREADY have permission when the screen opens, fetch the songs immediately.
     LaunchedEffect(hasPermission) {
         if (hasPermission) {
             onPermissionGranted()
@@ -51,7 +56,6 @@ fun HomeScreen(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
             hasPermission = isGranted
-            // NEW: If the user just clicked "Allow", fetch the songs!
             if (isGranted) {
                 onPermissionGranted()
             }
@@ -71,9 +75,7 @@ fun HomeScreen(
         }
     ) { paddingValues ->
 
-        // 3. Show different UI based on permission state
         if (hasPermission) {
-            // Permission GRANTED: Show the actual list of songs
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -84,12 +86,13 @@ fun HomeScreen(
                 item { ModernSearchBar(onClick = onSearchClick) }
                 item { FeaturedCard() }
                 item { Text("Your Songs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold) }
+
+                // 1. We now pass the WHOLE song object to SongItem so it can access the artworkUri
                 items(items = songs, key = { it.id }) { song ->
-                    SongCard(title = song.title, artist = song.artist, onClick = { onSongClick(song.title) })
+                    SongItem(song = song, onClick = { onSongClick(song.title) })
                 }
             }
         } else {
-            // Permission DENIED/NOT ASKED YET: Show a prompt
             PermissionPrompt(
                 modifier = Modifier.padding(paddingValues),
                 onRequestClick = { permissionLauncher.launch(permissionToRequest) }
@@ -98,7 +101,6 @@ fun HomeScreen(
     }
 }
 
-// 4. A clean, beautiful UI prompting the user for access
 @Composable
 private fun PermissionPrompt(
     modifier: Modifier = Modifier,
@@ -140,11 +142,9 @@ private fun PermissionPrompt(
     }
 }
 
-// ... Keep ModernSearchBar, FeaturedCard, and SongCard EXACTLY as they are ...
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ModernSearchBar(onClick: () -> Unit) {
-    // 3. Using Material 3's clickable Card variant
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(24.dp),
@@ -160,12 +160,10 @@ private fun ModernSearchBar(onClick: () -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.Default.Search,
-                contentDescription = "Search", // Improved accessibility
+                contentDescription = "Search",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
-
             Spacer(modifier = Modifier.width(12.dp))
-
             Text(
                 text = "Search songs, artists...",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -175,7 +173,6 @@ private fun ModernSearchBar(onClick: () -> Unit) {
     }
 }
 
-// FeaturedCard remains exactly the same
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FeaturedCard() {
@@ -196,13 +193,11 @@ private fun FeaturedCard() {
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
-
             Text(
                 text = "Play your favorite tracks from one clean place.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
-
             FilledTonalButton(
                 onClick = { },
                 shape = RoundedCornerShape(16.dp)
@@ -218,58 +213,68 @@ private fun FeaturedCard() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// 2. The new SongItem with Coil built in!
 @Composable
-private fun SongCard(
-    title: String,
-    artist: String,
+private fun SongItem(
+    song: Song,
     onClick: () -> Unit
 ) {
-    // 3. Using Material 3's clickable Card variant here as well
-    Card(
-        onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(16.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = title.firstOrNull()?.uppercase() ?: "S",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
+            // Fallback Icon
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f)
+            )
+            // Real Album Art
+            AsyncImage(
+                model = song.artworkUri,
+                contentDescription = "Album Art",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
 
-            Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(16.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = song.title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = song.artist,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        IconButton(onClick = { }) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "More Options",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

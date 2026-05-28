@@ -1,6 +1,8 @@
 package com.example.sonexa.data.repository
 
+import android.content.ContentUris
 import android.content.Context
+import android.net.Uri
 import android.provider.MediaStore
 import com.example.sonexa.model.Song
 import kotlinx.coroutines.Dispatchers
@@ -18,7 +20,8 @@ class AudioRepository(private val context: Context) {
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.DATA // This gives us the actual file path
+            MediaStore.Audio.Media.DATA, // This gives us the actual file path
+            MediaStore.Audio.Media.ALBUM_ID // This gives us the album art ID
         )
 
         // 2. Filter: Only get actual music files (no voice notes or ringtones)
@@ -40,6 +43,9 @@ class AudioRepository(private val context: Context) {
             val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
             val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
             val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+            val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+
+            val artworkUriBase = Uri.parse("content://media/external/audio/albumart")
 
             // Loop through the results and build our Song objects
             while (cursor.moveToNext()) {
@@ -50,7 +56,19 @@ class AudioRepository(private val context: Context) {
                 val artist = cursor.getString(artistColumn) ?: "<Unknown>"
                 val mediaUri = cursor.getString(dataColumn)
 
-                songs.add(Song(id = id, title = title, artist = artist, mediaUri = mediaUri))
+                // 2. Fetch the Album ID and build the final artwork path
+                val albumId = cursor.getLong(albumIdColumn)
+                val artworkUri = ContentUris.withAppendedId(artworkUriBase, albumId).toString()
+
+                songs.add(
+                    Song(
+                        id = id,
+                        title = title,
+                        artist = artist,
+                        mediaUri = mediaUri,
+                        artworkUri = artworkUri // Pass it to our model!
+                    )
+                )
             }
         }
 

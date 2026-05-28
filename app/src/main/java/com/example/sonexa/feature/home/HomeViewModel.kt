@@ -11,6 +11,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import androidx.media3.common.Player
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -21,6 +25,40 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
+
+    // 1. NEW: Hold the current text the user is typing
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    // 2. NEW: Automatically filter the songs!
+    // This watches BOTH _songs and _searchQuery. If either changes, it instantly recalculates.
+    val filteredSongs: StateFlow<List<Song>> = combine(_songs, _searchQuery) { songList, query ->
+        if (query.isBlank()) {
+            songList // If search is empty, show all songs
+        } else {
+            songList.filter {
+                // Search by both Title and Artist!
+                it.title.contains(query, ignoreCase = true) ||
+                        it.artist.contains(query, ignoreCase = true)
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    // 3. NEW: A function for the UI to call when the user types
+    fun updateSearchQuery(newQuery: String) {
+        _searchQuery.value = newQuery
+    }
+
+    // 1. NEW STATE: The ViewModel now tracks the current song globally
+    private val _currentSong = MutableStateFlow<Song?>(null)
+    val currentSong: StateFlow<Song?> = _currentSong.asStateFlow()
+
+    // 2. NEW STATES: Shuffle and Repeat
+    private val _isShuffleEnabled = MutableStateFlow(false)
+    val isShuffleEnabled: StateFlow<Boolean> = _isShuffleEnabled.asStateFlow()
+
+    private val _repeatMode = MutableStateFlow(Player.REPEAT_MODE_OFF)
+    val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
 
     // --- NEW REAL PLAYBACK STATES ---
     private val _isPlaying = MutableStateFlow(false)
@@ -39,12 +77,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun updatePlaybackState() {
         viewModelScope.launch {
             while (true) {
-                // Update our UI states with the real data from ExoPlayer
                 _isPlaying.value = audioController.isPlaying()
                 _currentPosition.value = audioController.getCurrentPosition()
                 _totalDuration.value = audioController.getDuration()
 
-                delay(500L) // Wait half a second, then check again!
+                // 3. NEW POLLING LOGIC: Sync the UI exactly with ExoPlayer's internal queue
+                _isShuffleEnabled.value = audioController.isShuffleEnabled()
+                _repeatMode.value = audioController.getRepeatMode()
+
+                val mediaId = audioController.getCurrentMediaId()
+                if (mediaId != null) {
+                    // Find the song in our list that matches the ID currently playing
+                    _currentSong.value = _songs.value.find { it.id.toString() == mediaId }
+                }
+
+                delay(500L)
             }
         }
     }
@@ -57,7 +104,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     // 2. Expose playback methods to the UI
     fun playSong(song: Song) {
-        audioController.playSong(song)
+        val currentSongs = _songs.value
+        val startIndex = currentSongs.indexOf(song)
+        if (startIndex != -1) {
+            audioController.playQueue(currentSongs, startIndex)
+        }
+    }
+
+    // 5. ADD QUEUE CONTROL METHODS
+    fun toggleShuffle() {
+        val newShuffleState = !_isShuffleEnabled.value
+        audioController.toggleShuffle(newShuffleState)
+    }
+
+    fun cycleRepeatMode() {
+        val newMode = when (_repeatMode.value) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+        audioController.setRepeatMode(newMode)
     }
 
     fun pauseSong() {
@@ -69,6 +135,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
     // NEW: Allow the user to drag the progress bar
     fun seekTo(position: Long) = audioController.seekTo(position)
+
+    fun skipToNext() = audioController.skipToNext()
+    fun skipToPrevious() = audioController.skipToPrevious()
 
     override fun onCleared() {
         super.onCleared()

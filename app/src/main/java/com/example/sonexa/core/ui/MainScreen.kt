@@ -36,9 +36,14 @@ fun MainScreen(
     val currentPosition by homeViewModel.currentPosition.collectAsState()
     val totalDuration by homeViewModel.totalDuration.collectAsState()
 
-    // THIS IS THE LINE THAT WAS MISSING!
-    // It keeps track of which song is currently active.
-    var currentSong by remember { mutableStateOf<Song?>(null) }
+    val currentSong by homeViewModel.currentSong.collectAsState()
+    val isShuffleEnabled by homeViewModel.isShuffleEnabled.collectAsState()
+    val repeatMode by homeViewModel.repeatMode.collectAsState()
+
+    // REMOVED: var currentSong by remember { mutableStateOf<Song?>(null) }
+    // We don't need it anymore, the ViewModel dictates the truth!
+    val searchQuery by homeViewModel.searchQuery.collectAsState()
+    val filteredSongs by homeViewModel.filteredSongs.collectAsState()
 
     Scaffold(
         bottomBar = {
@@ -47,7 +52,14 @@ fun MainScreen(
                     currentSong?.let { song ->
                         MiniPlayer(
                             song = song,
-                            onNavigateToPlayer = { navController.navigate(Screen.Player.route) }
+                            isPlaying = isPlaying,
+                            // ADD THESE TWO LINES SO THE PROGRESS BAR MOVES:
+                            currentPosition = currentPosition,
+                            totalDuration = totalDuration,
+                            onNavigateToPlayer = { navController.navigate(Screen.Player.route) },
+                            onPauseClick = { homeViewModel.pauseSong() },
+                            onResumeClick = { homeViewModel.resumeSong() },
+                            onNextClick = { homeViewModel.skipToNext() }
                         )
                     }
                     BottomNavigationBar(navController = navController, currentRoute = currentRoute)
@@ -63,14 +75,26 @@ fun MainScreen(
                 isPlaying = isPlaying,
                 currentPosition = currentPosition,
                 totalDuration = totalDuration,
+                isShuffleEnabled = isShuffleEnabled,
+                repeatMode = repeatMode,
+
                 onSongSelected = { newSong ->
-                    currentSong = newSong
                     homeViewModel.playSong(newSong)
                 },
                 onPermissionGranted = { homeViewModel.loadLocalAudioFiles() },
                 onPauseClick = { homeViewModel.pauseSong() },
                 onResumeClick = { homeViewModel.resumeSong() },
-                onSeek = { position -> homeViewModel.seekTo(position) }
+                onSeek = { position -> homeViewModel.seekTo(position) },
+                onShuffleClick = { homeViewModel.toggleShuffle() },
+                onRepeatClick = { homeViewModel.cycleRepeatMode() },
+
+                // ADD THESE TWO LINES: The final connection!
+                onNextClick = { homeViewModel.skipToNext() },
+                onPreviousClick = { homeViewModel.skipToPrevious() },
+                searchQuery = searchQuery,
+                filteredSongs = filteredSongs,
+                onSearchQueryChange = { newText -> homeViewModel.updateSearchQuery(newText) }
+
             )
         }
     }
@@ -89,10 +113,12 @@ private fun BottomNavigationBar(
             label = { Text("Home") },
             selected = currentRoute == Screen.Home.route,
             onClick = {
+                // FIXED NAV BUG: This explicitly clears the backstack up to Home
                 navController.navigate(Screen.Home.route) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    popUpTo(Screen.Home.route) {
+                        inclusive = false
+                    }
                     launchSingleTop = true
-                    restoreState = true
                 }
             }
         )

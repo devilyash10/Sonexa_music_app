@@ -13,6 +13,7 @@ import com.example.sonexa.service.AudioService
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 
+
 class AudioController(context: Context) {
 
     private var mediaControllerFuture: ListenableFuture<MediaController>
@@ -34,22 +35,23 @@ class AudioController(context: Context) {
 
     // --- PLAYBACK COMMANDS ---
 
-    fun playSong(song: Song) {
-        // Production Trick: We add metadata here so the Android Lock Screen
-        // knows the title and artist of the song playing!
-        val mediaMetadata = MediaMetadata.Builder()
-            .setTitle(song.title)
-            .setArtist(song.artist)
-            .build()
+    fun playQueue(songs: List<Song>, startIndex: Int) {
+        val mediaItems = songs.map { song ->
+            val mediaMetadata = MediaMetadata.Builder()
+                .setTitle(song.title)
+                .setArtist(song.artist)
+                .build()
 
-        val mediaItem = MediaItem.Builder()
-            .setMediaId(song.id.toString())
-            .setUri(song.mediaUri)
-            .setMediaMetadata(mediaMetadata)
-            .build()
+            MediaItem.Builder()
+                .setMediaId(song.id.toString())
+                .setUri(song.mediaUri)
+                .setMediaMetadata(mediaMetadata)
+                .build()
+        }
 
         mediaController?.let { controller ->
-            controller.setMediaItem(mediaItem)
+            // Give ExoPlayer the whole list, tell it where to start, and start at 0:00
+            controller.setMediaItems(mediaItems, startIndex, 0L)
             controller.prepare()
             controller.play()
         }
@@ -70,7 +72,28 @@ class AudioController(context: Context) {
     fun skipToPrevious() {
         mediaController?.seekToPreviousMediaItem()
     }
+    // 2. ADD THESE NEW QUEUE METHODS AT THE BOTTOM
+    fun toggleShuffle(enabled: Boolean) {
+        mediaController?.shuffleModeEnabled = enabled
+    }
 
+    fun setRepeatMode(repeatMode: Int) {
+        // repeatMode uses Player.REPEAT_MODE_OFF, REPEAT_MODE_ALL, or REPEAT_MODE_ONE
+        mediaController?.repeatMode = repeatMode
+    }
+
+    fun getCurrentMediaId(): String? {
+        // This tells us exactly which song ExoPlayer is currently playing
+        return mediaController?.currentMediaItem?.mediaId
+    }
+
+    fun isShuffleEnabled(): Boolean {
+        return mediaController?.shuffleModeEnabled ?: false
+    }
+
+    fun getRepeatMode(): Int {
+        return mediaController?.repeatMode ?: Player.REPEAT_MODE_OFF
+    }
     // --- NEW GETTERS AND SEEKER ---
 
     fun isPlaying(): Boolean {

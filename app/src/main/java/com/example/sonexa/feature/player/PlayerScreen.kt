@@ -16,27 +16,36 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.media3.common.Player
 import com.example.sonexa.model.Song
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     song: Song,
 
-    // 1. Receive the REAL state from ExoPlayer
     isPlaying: Boolean,
     currentPosition: Long,
     totalDuration: Long,
+
+    // NEW STATES: Added for Epic 1
+    isShuffleEnabled: Boolean,
+    repeatMode: Int,
 
     onBackClick: () -> Unit = {},
     onNextClick: () -> Unit = {},
     onPreviousClick: () -> Unit = {},
     onPauseClick: () -> Unit = {},
     onResumeClick: () -> Unit = {},
-    onSeek: (Long) -> Unit = {} // 2. Receive the seek action
+    onSeek: (Long) -> Unit = {},
+
+    // NEW ACTIONS: Added for Epic 1
+    onShuffleClick: () -> Unit = {},
+    onRepeatClick: () -> Unit = {}
 ) {
-    // Look! No fake states or coroutine timers! The UI is completely dumb and clean.
-    val scrollState = rememberScrollState() // Added to prevent overlap
+    val scrollState = rememberScrollState()
 
     Scaffold(
         topBar = {
@@ -58,10 +67,11 @@ fun PlayerScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 24.dp)
-                .verticalScroll(scrollState), // This prevents the overlap bug!
+                .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. Album Art (Removed weight(1f) to stop it from crushing the text)
+
+            // 1. Real Album Art with Coil
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -71,11 +81,20 @@ fun PlayerScreen(
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
+                // The fallback icon (always sits at the bottom)
                 Icon(
                     imageVector = Icons.Default.MusicNote,
                     contentDescription = null,
                     modifier = Modifier.size(100.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                )
+
+                // The actual Album Art (draws over the icon if it successfully loads)
+                AsyncImage(
+                    model = song.artworkUri,
+                    contentDescription = "Album Art",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
             }
 
@@ -85,14 +104,14 @@ fun PlayerScreen(
                 horizontalAlignment = Alignment.Start
             ) {
                 Text(
-                    text = song.title, // Dynamic Title
+                    text = song.title,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = song.artist, // Dynamic Artist
+                    text = song.artist,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -103,10 +122,8 @@ fun PlayerScreen(
             // 3. Progress Bar (Slider)
             Column {
                 Slider(
-                    // Calculate percentage (protect against divide by zero)
                     value = if (totalDuration > 0) currentPosition.toFloat() / totalDuration.toFloat() else 0f,
                     onValueChange = { newPercent ->
-                        // Tell the ViewModel where the user dragged the slider
                         onSeek((newPercent * totalDuration).toLong())
                     },
                     colors = SliderDefaults.colors(
@@ -119,7 +136,6 @@ fun PlayerScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // 4. Use the new Millisecond formatter
                     Text(formatTime(currentPosition), style = MaterialTheme.typography.labelSmall)
                     Text(formatTime(totalDuration), style = MaterialTheme.typography.labelSmall)
                 }
@@ -133,7 +149,15 @@ fun PlayerScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
-                IconButton(onClick = { }) { Icon(Icons.Default.Shuffle, contentDescription = "Shuffle") }
+                // Shuffle Button (Fixed)
+                IconButton(onClick = onShuffleClick) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = "Shuffle",
+                        tint = if (isShuffleEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 IconButton(onClick = onPreviousClick) { Icon(Icons.Rounded.SkipPrevious, contentDescription = "Skip Previous", modifier = Modifier.size(42.dp)) }
 
                 Surface(
@@ -145,7 +169,6 @@ fun PlayerScreen(
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 ) {
                     Icon(
-                        // UI automatically flips based on the real ExoPlayer state!
                         imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = "Play/Pause",
                         modifier = Modifier.padding(20.dp).size(40.dp)
@@ -153,7 +176,15 @@ fun PlayerScreen(
                 }
 
                 IconButton(onClick = onNextClick) { Icon(Icons.Rounded.SkipNext, contentDescription = "Skip Next", modifier = Modifier.size(42.dp)) }
-                IconButton(onClick = { }) { Icon(Icons.Default.Repeat, contentDescription = "Repeat") }
+
+                // Repeat Button (Fixed)
+                IconButton(onClick = onRepeatClick) {
+                    Icon(
+                        imageVector = if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        contentDescription = "Repeat",
+                        tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(48.dp))

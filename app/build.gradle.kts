@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp) // <--- Changed f
 }
 
 android {
@@ -68,4 +69,17 @@ dependencies {
     val media3Version = "1.3.1" // Use the latest stable version
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
+
+    // Coil for Jetpack Compose (Image Loading)
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // Room Database
+    val room_version = "2.6.1"
+    implementation("androidx.room:room-runtime:$room_version")
+    implementation("androidx.room:room-ktx:$room_version")
+    ksp("androidx.room:room-compiler:$room_version")
+}
+// Add this at the bottom of the file
+ksp {
+    arg("room.generateKotlin", "true")
 }
