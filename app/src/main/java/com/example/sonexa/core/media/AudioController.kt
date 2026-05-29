@@ -71,7 +71,7 @@ class AudioController(private val context: Context) {
     fun isShuffleEnabled() = mediaController?.shuffleModeEnabled ?: false
     fun getRepeatMode() = mediaController?.repeatMode ?: Player.REPEAT_MODE_OFF
     fun getCurrentMediaId() = mediaController?.currentMediaItem?.mediaId
-
+    fun getCurrentMediaItem() = mediaController?.currentMediaItem
     fun release() {
         mediaControllerFuture?.let { MediaController.releaseFuture(it) }
         mediaController = null

@@ -89,6 +89,7 @@ fun MainScreen(
                 favoriteSongIds = favoriteSongIds,
                 playlists = playlists,
                 onSongSelected = { homeViewModel.playSong(it) },
+                onOnlineSongSelected = { homeViewModel.playOnlineSong(it) },
                 onPermissionGranted = { homeViewModel.loadLocalAudioFiles() },
                 onPauseClick = { homeViewModel.pauseSong() },
                 onResumeClick = { homeViewModel.resumeSong() },

@@ -39,7 +39,8 @@ fun HomeScreen(
     onSongClick: (String) -> Unit,
     onSearchClick: () -> Unit,
     onPermissionGranted: () -> Unit,
-    onShufflePlayClick: () -> Unit
+    onShufflePlayClick: () -> Unit,
+    onNavigateToOnline: () -> Unit
 ) {
     val context = LocalContext.current
     val permissionToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -114,12 +115,14 @@ fun HomeScreen(
                 CloudCard(
                     title = "Cloud-streaming",
                     gradientColors = listOf(Color(0xFF8A2BE2), Color(0xFF00F0FF)), // Purple to Cyan
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    onClick = onNavigateToOnline // 🚨 Wire the click!
                 )
                 CloudCard(
                     title = "Global Top 50",
                     gradientColors = listOf(Color(0xFFFF2A6D), Color(0xFFFF7E67)), // Pink to Orange
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    onClick = onNavigateToOnline // 🚨 Wire the click!
                 )
             }
         }
@@ -244,12 +247,18 @@ fun RecentlyPlayedCard(song: Song, onClick: () -> Unit) {
 }
 
 @Composable
-fun CloudCard(title: String, gradientColors: List<Color>, modifier: Modifier = Modifier) {
+fun CloudCard(
+    title: String,
+    gradientColors: List<Color>,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit // 🚨 1. Add the click parameter
+) {
     Box(
         modifier = modifier
-            .aspectRatio(1.5f) // Slightly wider rectangle for the two top cards
+            .aspectRatio(1.5f)
             .clip(RoundedCornerShape(16.dp))
-            .background(Brush.linearGradient(gradientColors)),
+            .background(Brush.linearGradient(gradientColors))
+            .clickable { onClick() }, // 🚨 2. Make the box clickable!
         contentAlignment = Alignment.BottomStart
     ) {
         Text(

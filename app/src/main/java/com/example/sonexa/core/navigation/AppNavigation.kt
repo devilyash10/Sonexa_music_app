@@ -25,7 +25,7 @@ fun AppNavigation(
     totalDuration: Long,
     isShuffleEnabled: Boolean,
     repeatMode: Int,
-
+    onOnlineSongSelected: (Song) -> Unit,
     onSongSelected: (Song) -> Unit,
     onPermissionGranted: () -> Unit,
     onPauseClick: () -> Unit,
@@ -66,18 +66,22 @@ fun AppNavigation(
                 },
                 onSearchClick = { navController.navigate(Screen.Search.route) },
                 onPermissionGranted = onPermissionGranted,
-
-                // 🚨 BUG FIX: Now it picks a random song, plays it, and ensures shuffle is ON!
                 onShufflePlayClick = {
                     if (songs.isNotEmpty()) {
-                        // 1. Pick a random song from your library
                         val randomSong = songs.random()
-                        // 2. Play it immediately
                         onSongSelected(randomSong)
-                        // 3. Ensure the ExoPlayer shuffle mode is turned on
                         if (!isShuffleEnabled) {
                             onShuffleClick()
                         }
+                    }
+                },
+
+                // 🚨 ADD THIS BLOCK: It perfectly mimics clicking the bottom bar!
+                onNavigateToOnline = {
+                    navController.navigate(Screen.Online.route) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
                     }
                 }
             )
@@ -157,7 +161,25 @@ fun AppNavigation(
             )
         }
         composable(Screen.Online.route) {
-            OnlineScreen()
+            OnlineScreen(
+                onOnlineSongClick = { onlineSong ->
+                    // Convert the DTO schema to your app's native data structure
+                    val mappedSong = Song(
+                        id = onlineSong.trackId,
+                        title = onlineSong.trackName ?: "Unknown Track",
+                        artist = onlineSong.artistName ?: "Unknown Artist",
+                        // Apple previews use a standard direct audio streaming stream url
+                        mediaUri = onlineSong.previewUrl ?: "",
+                        artworkUri = onlineSong.artworkUrl?.replace("100x100bb", "500x500bb") ?: ""
+                    )
+
+                    // Route directly through the unified service stream pipeline
+                    onOnlineSongSelected(mappedSong)
+
+                    // Transition smoothly into the locked master blueprint player view
+                    navController.navigate(Screen.Player.route)
+                }
+            )
         }
 
         composable(Screen.Settings.route) {

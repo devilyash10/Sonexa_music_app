@@ -21,6 +21,9 @@ import com.example.sonexa.data.local.PlaylistEntity
 import com.example.sonexa.data.local.PlaylistSongCrossRef
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import android.net.Uri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -107,16 +110,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _repeatMode.value = audioController.getRepeatMode()
 
                 val mediaId = audioController.getCurrentMediaId()
-                if (mediaId != null) {
-                    // Find the song in our list that matches the ID currently playing
-                    _currentSong.value = _songs.value.find { it.id.toString() == mediaId }
+                val mediaItem = audioController.getCurrentMediaItem() // Reads the raw ExoPlayer data
+
+                if (mediaId != null && mediaItem != null) {
+                    val songId = mediaId.toLongOrNull() ?: 0L
+
+                    // 1. Try to find the song in your local storage
+                    val localSong = _songs.value.find { it.id == songId }
+
+                    // 2. If it's NOT local, reconstruct it from the ExoPlayer web stream!
+                    val activeSong = localSong ?: Song(
+                        id = songId,
+                        title = mediaItem.mediaMetadata.title?.toString() ?: "Unknown Track",
+                        artist = mediaItem.mediaMetadata.artist?.toString() ?: "Unknown Artist",
+                        mediaUri = mediaItem.localConfiguration?.uri?.toString() ?: "",
+                        artworkUri = mediaItem.mediaMetadata.artworkUri?.toString() ?: ""
+                    )
+
+                    // 3. Update the UI safely so it never goes black!
+                    _currentSong.value = activeSong
                 }
 
                 delay(500L)
             }
         }
     }
-
     fun loadLocalAudioFiles() {
         viewModelScope.launch {
             _songs.value = repository.getAudioFiles()
@@ -130,6 +148,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (startIndex != -1) {
             audioController.playQueue(currentSongs, startIndex)
         }
+    }
+    // 🚨 FIX 2: A dedicated player function for web streams
+    fun playOnlineSong(song: Song) {
+        // 1. Force the reactive state flow to update so the player view loads the metadata instantly
+        _currentSong.value = song
+
+        // 2. Wrap the isolated streaming track in a single-element playback collection
+        val onlineQueue = listOf(song)
+
+        // 3. Dispatch directly to your existing background audio architecture
+        // Your audioController engine will treat the streaming web link exactly like a local file link!
+        audioController.playQueue(onlineQueue, 0)
     }
 
     // 5. ADD QUEUE CONTROL METHODS
