@@ -1,5 +1,298 @@
 package com.example.sonexa.feature.home
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import coil.compose.AsyncImage
+import com.example.sonexa.model.Song
+import androidx.compose.runtime.LaunchedEffect
+
+@Composable
+fun HomeScreen(
+    songs: List<Song>,
+    onSongClick: (String) -> Unit,
+    onSearchClick: () -> Unit,
+    onPermissionGranted: () -> Unit,
+    onShufflePlayClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val permissionToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
+    // Checks if permission is already granted to fix the "Scan Storage" bug
+    val hasPermission = ContextCompat.checkSelfPermission(context, permissionToRequest) == PackageManager.PERMISSION_GRANTED
+    LaunchedEffect(hasPermission) {
+        if (hasPermission && songs.isEmpty()) {
+            onPermissionGranted()
+        }
+    }
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        item { Spacer(modifier = Modifier.height(8.dp)) }
+
+        // 1. Sleek Brand Header with Search Icon on the right
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "SONEXA",
+                        style = MaterialTheme.typography.headlineLarge, // Clean, not overly huge
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "By Yash Bhadoriya",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                // Search Button moved here to fill the right corner!
+                IconButton(
+                    onClick = onSearchClick,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // 2. Cloud Streaming Grid (Mockup Placeholders)
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                CloudCard(
+                    title = "Cloud-streaming",
+                    gradientColors = listOf(Color(0xFF8A2BE2), Color(0xFF00F0FF)), // Purple to Cyan
+                    modifier = Modifier.weight(1f)
+                )
+                CloudCard(
+                    title = "Global Top 50",
+                    gradientColors = listOf(Color(0xFFFF2A6D), Color(0xFFFF7E67)), // Pink to Orange
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // 3. Recently Played (Now uses actual songs!)
+        item {
+            Column {
+                Text(
+                    text = "Recently Played",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                if (songs.isNotEmpty()) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        // Takes the first 6 songs as a mockup for recently played
+                        items(songs.take(6)) { song ->
+                            RecentlyPlayedCard(song = song, onClick = { onSongClick(song.title) })
+                        }
+                    }
+                } else {
+                    Text("No recent songs.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        // 4. Section Header for Actual Local Audio
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Saved Local Tracks",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                IconButton(
+                    onClick = onShufflePlayClick,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Shuffle,
+                        contentDescription = "Shuffle Play",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        // 5. The Real Local Songs List (With Bug Fix)
+        if (songs.isEmpty()) {
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (!hasPermission) {
+                        Text("Permission required to access media.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = onPermissionGranted,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Scan Storage", color = MaterialTheme.colorScheme.onPrimary)
+                        }
+                    } else {
+                        // Permission granted, just loading data
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        } else {
+            items(songs) { song ->
+                LocalSongItem(song = song, onClick = { onSongClick(song.title) })
+            }
+            item { Spacer(modifier = Modifier.height(100.dp)) } // Mini-player buffer
+        }
+    }
+}
+
+// --- BEAUTIFUL UI COMPONENTS ---
+
+@Composable
+fun RecentlyPlayedCard(song: Song, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier.width(100.dp).clickable { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+            AsyncImage(
+                model = song.artworkUri,
+                contentDescription = "Album Art",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = song.title,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+fun CloudCard(title: String, gradientColors: List<Color>, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .aspectRatio(1.5f) // Slightly wider rectangle for the two top cards
+            .clip(RoundedCornerShape(16.dp))
+            .background(Brush.linearGradient(gradientColors)),
+        contentAlignment = Alignment.BottomStart
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            modifier = Modifier.padding(16.dp)
+        )
+    }
+}
+
+@Composable
+fun LocalSongItem(song: Song, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+            AsyncImage(model = song.artworkUri, contentDescription = "Album Art", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(song.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/*
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -280,3 +573,4 @@ private fun SongItem(
         }
     }
 }
+*/

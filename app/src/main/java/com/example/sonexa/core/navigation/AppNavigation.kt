@@ -67,12 +67,22 @@ fun AppNavigation(
                 onSearchClick = { navController.navigate(Screen.Search.route) },
                 onPermissionGranted = onPermissionGranted,
 
-                // NEW: Connect the Home Screen button directly to the ViewModel's new function!
-                onShufflePlayClick = onShuffleClick
-                // (Since onShuffleClick is already passed to AppNavigation, we can just reuse it,
-                // OR better yet, let's just make sure your MainScreen passes homeViewModel.shuffleAndPlayAll() here).
+                // 🚨 BUG FIX: Now it picks a random song, plays it, and ensures shuffle is ON!
+                onShufflePlayClick = {
+                    if (songs.isNotEmpty()) {
+                        // 1. Pick a random song from your library
+                        val randomSong = songs.random()
+                        // 2. Play it immediately
+                        onSongSelected(randomSong)
+                        // 3. Ensure the ExoPlayer shuffle mode is turned on
+                        if (!isShuffleEnabled) {
+                            onShuffleClick()
+                        }
+                    }
+                }
             )
         }
+
 
         composable(Screen.Player.route) {
             if (currentSong != null) {
@@ -148,6 +158,10 @@ fun AppNavigation(
         }
         composable(Screen.Online.route) {
             OnlineScreen()
+        }
+
+        composable(Screen.Settings.route) {
+            com.example.sonexa.feature.settings.SettingsScreen()
         }
     }
 }
