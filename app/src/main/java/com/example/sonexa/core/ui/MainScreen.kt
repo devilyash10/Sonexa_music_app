@@ -21,6 +21,8 @@ import com.example.sonexa.core.navigation.Screen
 import com.example.sonexa.feature.home.HomeViewModel
 import com.example.sonexa.feature.player.MiniPlayer
 import com.example.sonexa.model.Song
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Public
 
 @Composable
 fun MainScreen(
@@ -47,6 +49,7 @@ fun MainScreen(
     val searchQuery by homeViewModel.searchQuery.collectAsState()
     val filteredSongs by homeViewModel.filteredSongs.collectAsState()
     val favoriteSongIds by homeViewModel.favoriteSongIds.collectAsState()
+    val playlists by homeViewModel.playlists.collectAsState()
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
@@ -102,6 +105,13 @@ fun MainScreen(
 
                 // ADD THESE TWO FOR FAVORITES:
                 favoriteSongIds = favoriteSongIds,
+                playlists = playlists,
+                onCreatePlaylist = { playlistName -> homeViewModel.createPlaylist(playlistName) },
+                onAddToPlaylist = { playlistId, songId -> homeViewModel.addSongToPlaylist(playlistId, songId) },
+
+                onGetPlaylistSongs = { playlistId -> homeViewModel.getPlaylistSongs(playlistId) },
+
+
                 onToggleFavorite = { songToLike -> homeViewModel.toggleFavorite(songToLike) }
 
             )
@@ -116,31 +126,34 @@ private fun BottomNavigationBar(
 ) {
     NavigationBar(
         tonalElevation = 8.dp
-        // 🚨 REMOVED: modifier = Modifier.height(60.dp)
-        // This was the exact line crushing your icons against the system nav bar!
     ) {
+        // 1. Home
         NavigationBarItem(
             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
             selected = currentRoute == Screen.Home.route,
             alwaysShowLabel = false,
-            onClick = {
-                navController.navigate(Screen.Home.route) {
-                    popUpTo(Screen.Home.route) { inclusive = false }
-                    launchSingleTop = true
-                }
-            }
+            onClick = { navController.navigate(Screen.Home.route) { popUpTo(Screen.Home.route) { inclusive = false }; launchSingleTop = true } }
         )
+        // 2. Search
         NavigationBarItem(
             icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
             selected = currentRoute == Screen.Search.route,
             alwaysShowLabel = false,
-            onClick = {
-                navController.navigate(Screen.Search.route) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-            }
+            onClick = { navController.navigate(Screen.Search.route) { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }
+        )
+        // 3. NEW: Library
+        NavigationBarItem(
+            icon = { Icon(Icons.Default.LibraryMusic, contentDescription = "Library") },
+            selected = currentRoute == Screen.Library.route,
+            alwaysShowLabel = false,
+            onClick = { navController.navigate(Screen.Library.route) { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }
+        )
+        // 4. NEW: Online
+        NavigationBarItem(
+            icon = { Icon(Icons.Default.Public, contentDescription = "Online") },
+            selected = currentRoute == Screen.Online.route,
+            alwaysShowLabel = false,
+            onClick = { navController.navigate(Screen.Online.route) { popUpTo(navController.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } }
         )
     }
 }

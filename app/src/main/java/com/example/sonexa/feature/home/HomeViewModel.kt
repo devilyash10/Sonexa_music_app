@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import com.example.sonexa.data.local.FavoriteSongEntity
 import com.example.sonexa.data.local.SonexaDatabase
+import com.example.sonexa.data.local.PlaylistEntity
+import com.example.sonexa.data.local.PlaylistSongCrossRef
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -27,6 +31,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     // 1. INITIALIZE THE DATABASE DAO
     private val favoriteDao = SonexaDatabase.getDatabase(application).favoriteDao()
+
+    // INITIALIZE PLAYLIST DAO
+    private val playlistDao = SonexaDatabase.getDatabase(application).playlistDao()
+
+    // NEW STATE: List of all custom playlists (Updates automatically!)
+    val playlists: StateFlow<List<PlaylistEntity>> = playlistDao.getAllPlaylists()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
 
@@ -179,6 +191,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             // 2. Pick a random song to start the queue
             playSong(currentList.random())
+        }
+    }
+
+    // --- PLAYLIST CONTROLS ---
+    fun createPlaylist(name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            playlistDao.insertPlaylist(PlaylistEntity(name = name.trim()))
+        }
+    }
+
+    fun addSongToPlaylist(playlistId: Long, songId: Long) {
+        viewModelScope.launch {
+            playlistDao.insertSongIntoPlaylist(
+                PlaylistSongCrossRef(playlistId = playlistId, songId = songId)
+            )
+        }
+    }
+
+    // NEW: Fetches the actual Song objects for a specific playlist
+    fun getPlaylistSongs(playlistId: Long): Flow<List<Song>> {
+        return playlistDao.getSongIdsInPlaylist(playlistId).map { songIds ->
+            // Match the IDs from the database with the real songs on the device
+            _songs.value.filter { songIds.contains(it.id) }
         }
     }
 }

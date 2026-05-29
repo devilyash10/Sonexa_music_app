@@ -9,44 +9,61 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
-import com.example.sonexa.model.Song
 import coil.compose.AsyncImage
-import androidx.compose.ui.layout.ContentScale
+import com.example.sonexa.data.local.PlaylistEntity
+import com.example.sonexa.model.Song
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     song: Song,
-
     isPlaying: Boolean,
     currentPosition: Long,
     totalDuration: Long,
-
-    // NEW STATES: Added for Epic 1
     isShuffleEnabled: Boolean,
     repeatMode: Int,
     isFavorite: Boolean,
-    onToggleFavorite: () -> Unit,
 
+    playlists: List<PlaylistEntity>,
+
+    onToggleFavorite: () -> Unit,
     onBackClick: () -> Unit = {},
     onNextClick: () -> Unit = {},
     onPreviousClick: () -> Unit = {},
     onPauseClick: () -> Unit = {},
     onResumeClick: () -> Unit = {},
     onSeek: (Long) -> Unit = {},
-
-    // NEW ACTIONS: Added for Epic 1
     onShuffleClick: () -> Unit = {},
-    onRepeatClick: () -> Unit = {}
+    onRepeatClick: () -> Unit = {},
+    onCreatePlaylist: (String) -> Unit,
+    onAddToPlaylist: (Long, Long) -> Unit,
+
+    // NEW: Ready for the Lyrics screen from our UI Mockup!
+    onNavigateToLyrics: () -> Unit = {}
 ) {
+    // 1. Create a state to show/hide the bottom sheet
+    var showBottomSheet by remember { mutableStateOf(false) }
+
+    // 2. Trigger the Bottom Sheet
+    if (showBottomSheet) {
+        AddToPlaylistBottomSheet(
+            song = song,
+            playlists = playlists,
+            onDismiss = { showBottomSheet = false },
+            onCreatePlaylist = onCreatePlaylist,
+            onAddToPlaylist = onAddToPlaylist
+        )
+    }
+
     val scrollState = rememberScrollState()
 
     Scaffold(
@@ -60,6 +77,10 @@ fun PlayerScreen(
                 },
                 actions = {
                     IconButton(onClick = { }) { Icon(Icons.Default.MoreVert, contentDescription = "Settings") }
+                    // FIXED: Using standard Icons.Default to prevent AutoMirrored version crashes
+                    IconButton(onClick = { showBottomSheet = true }) {
+                        Icon(Icons.Default.PlaylistAdd, contentDescription = "Add to Playlist")
+                    }
                 }
             )
         }
@@ -83,7 +104,6 @@ fun PlayerScreen(
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
-                // The fallback icon (always sits at the bottom)
                 Icon(
                     imageVector = Icons.Default.MusicNote,
                     contentDescription = null,
@@ -91,7 +111,6 @@ fun PlayerScreen(
                     tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
                 )
 
-                // The actual Album Art (draws over the icon if it successfully loads)
                 AsyncImage(
                     model = song.artworkUri,
                     contentDescription = "Album Art",
@@ -104,11 +123,10 @@ fun PlayerScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp), // Slight padding to align with album art
+                    .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // The Text gets weight(1f) to push the Heart to the right edge
                 Column(
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.Start
@@ -130,12 +148,11 @@ fun PlayerScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.width(16.dp)) // Buffer between text and icon
+                Spacer(modifier = Modifier.width(16.dp))
 
-                // The Premium Heart Button
                 IconButton(
                     onClick = onToggleFavorite,
-                    modifier = Modifier.size(48.dp) // Larger touch target
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -146,9 +163,8 @@ fun PlayerScreen(
                 }
             }
 
-
             // 3. Progress Bar (Slider)
-            Column {
+            Column(modifier = Modifier.padding(top = 16.dp)) {
                 Slider(
                     value = if (totalDuration > 0) currentPosition.toFloat() / totalDuration.toFloat() else 0f,
                     onValueChange = { newPercent ->
@@ -171,13 +187,12 @@ fun PlayerScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 5. Playback Controls
+            // 4. Playback Controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
-                // Shuffle Button (Fixed)
                 IconButton(onClick = onShuffleClick) {
                     Icon(
                         imageVector = Icons.Default.Shuffle,
@@ -186,7 +201,9 @@ fun PlayerScreen(
                     )
                 }
 
-                IconButton(onClick = onPreviousClick) { Icon(Icons.Rounded.SkipPrevious, contentDescription = "Skip Previous", modifier = Modifier.size(42.dp)) }
+                IconButton(onClick = onPreviousClick) {
+                    Icon(Icons.Rounded.SkipPrevious, contentDescription = "Skip Previous", modifier = Modifier.size(42.dp))
+                }
 
                 Surface(
                     onClick = {
@@ -203,9 +220,10 @@ fun PlayerScreen(
                     )
                 }
 
-                IconButton(onClick = onNextClick) { Icon(Icons.Rounded.SkipNext, contentDescription = "Skip Next", modifier = Modifier.size(42.dp)) }
+                IconButton(onClick = onNextClick) {
+                    Icon(Icons.Rounded.SkipNext, contentDescription = "Skip Next", modifier = Modifier.size(42.dp))
+                }
 
-                // Repeat Button (Fixed)
                 IconButton(onClick = onRepeatClick) {
                     Icon(
                         imageVector = if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
@@ -220,7 +238,7 @@ fun PlayerScreen(
     }
 }
 
-// 6. Helper function to format Milliseconds (Long) into MM:SS
+// 5. Helper function to format Milliseconds (Long) into MM:SS
 private fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000
     val minutes = totalSeconds / 60

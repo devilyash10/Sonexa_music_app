@@ -1,10 +1,16 @@
 package com.example.sonexa.core.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.example.sonexa.data.local.PlaylistEntity
 import com.example.sonexa.feature.home.HomeScreen
+import com.example.sonexa.feature.library.LibraryScreen
+import com.example.sonexa.feature.library.PlaylistDetailScreen
+import com.example.sonexa.feature.online.OnlineScreen
 import com.example.sonexa.feature.player.PlayerScreen
 import com.example.sonexa.feature.search.SearchScreen
 import com.example.sonexa.model.Song
@@ -35,7 +41,13 @@ fun AppNavigation(
     filteredSongs: List<Song>,
     onSearchQueryChange: (String) -> Unit,
 
+    // Add this to your AppNavigation parameters:
+    onGetPlaylistSongs: (Long) -> kotlinx.coroutines.flow.Flow<List<Song>>,
+
     favoriteSongIds: List<Long>,
+    playlists: List<PlaylistEntity>,
+    onCreatePlaylist: (String) -> Unit,
+    onAddToPlaylist: (Long, Long) -> Unit,
     onToggleFavorite: (Song) -> Unit
 ) {
     NavHost(
@@ -71,10 +83,8 @@ fun AppNavigation(
                     totalDuration = totalDuration,
                     isShuffleEnabled = isShuffleEnabled,
                     repeatMode = repeatMode,
-                    // We instantly check if the current song's ID exists in the Room database!
                     isFavorite = favoriteSongIds.contains(currentSong.id),
                     onToggleFavorite = { onToggleFavorite(currentSong) },
-
                     onBackClick = { navController.popBackStack() },
                     onPauseClick = onPauseClick,
                     onResumeClick = onResumeClick,
@@ -82,7 +92,12 @@ fun AppNavigation(
                     onShuffleClick = onShuffleClick,
                     onRepeatClick = onRepeatClick,
                     onNextClick = onNextClick,
-                    onPreviousClick = onPreviousClick
+                    onPreviousClick = onPreviousClick,
+
+                    // 2. PASS THEM DOWN TO THE PLAYER SCREEN:
+                    playlists = playlists,
+                    onCreatePlaylist = onCreatePlaylist,
+                    onAddToPlaylist = onAddToPlaylist
                 )
             }
         }
@@ -98,6 +113,41 @@ fun AppNavigation(
                     navController.navigate(Screen.Player.route)
                 }
             )
+        }
+
+        // 1. UPDATE THE LIBRARY SCREEN
+        composable(Screen.Library.route) {
+            LibraryScreen(
+                playlists = playlists,
+                onPlaylistClick = { playlist ->
+                    navController.navigate(Screen.PlaylistDetail.createRoute(playlist.playlistId, playlist.name))
+                }
+            )
+        }
+
+        // 2. ADD THE PLAYLIST DETAIL SCREEN
+        composable(
+            route = Screen.PlaylistDetail.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("playlistId") { type = androidx.navigation.NavType.LongType },
+                androidx.navigation.navArgument("playlistName") { type = androidx.navigation.NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: 0L
+            val playlistName = backStackEntry.arguments?.getString("playlistName") ?: "Unknown"
+
+            // Collect the specific songs for this playlist directly from the ViewModel!
+            val playlistSongs by onGetPlaylistSongs(playlistId).collectAsState(initial = emptyList())
+
+            PlaylistDetailScreen(
+                playlistName = playlistName,
+                songs = playlistSongs,
+                onSongClick = { onSongSelected(it); navController.navigate(Screen.Player.route) },
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.Online.route) {
+            OnlineScreen()
         }
     }
 }

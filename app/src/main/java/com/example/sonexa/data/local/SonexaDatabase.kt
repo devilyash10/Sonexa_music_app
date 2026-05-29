@@ -5,24 +5,38 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-// Bump the version number if you ever change the Entity structure later
-@Database(entities = [FavoriteSongEntity::class], version = 1, exportSchema = false)
+// 1. Added the two new entities and bumped version to 2
+@Database(
+    entities = [
+        FavoriteSongEntity::class,
+        PlaylistEntity::class,
+        PlaylistSongCrossRef::class
+    ],
+    version = 2,
+    exportSchema = false
+)
 abstract class SonexaDatabase : RoomDatabase() {
 
     abstract fun favoriteDao(): FavoriteDao
+
+    // 2. Added the new Playlist DAO
+    abstract fun playlistDao(): PlaylistDao
 
     companion object {
         @Volatile
         private var INSTANCE: SonexaDatabase? = null
 
         fun getDatabase(context: Context): SonexaDatabase {
-            // Only create one instance of the database to prevent memory leaks (Singleton pattern)
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     SonexaDatabase::class.java,
                     "sonexa_database"
-                ).build()
+                )
+                    // 3. THIS LINE IS MANDATORY TO PREVENT CRASHES ON VERSION BUMP
+                    .fallbackToDestructiveMigration()
+                    .build()
+
                 INSTANCE = instance
                 instance
             }
