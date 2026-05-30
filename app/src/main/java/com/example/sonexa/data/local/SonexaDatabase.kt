@@ -10,9 +10,10 @@ import androidx.room.RoomDatabase
     entities = [
         FavoriteSongEntity::class,
         PlaylistEntity::class,
-        PlaylistSongCrossRef::class
+        PlaylistSongCrossRef::class,
+        SavedSongEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class SonexaDatabase : RoomDatabase() {
@@ -36,7 +37,6 @@ abstract class SonexaDatabase : RoomDatabase() {
                     // 3. THIS LINE IS MANDATORY TO PREVENT CRASHES ON VERSION BUMP
                     .fallbackToDestructiveMigration()
                     .build()
-
                 INSTANCE = instance
                 instance
             }

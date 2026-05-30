@@ -44,6 +44,9 @@ fun MainScreen(
     val searchQuery by homeViewModel.searchQuery.collectAsState()
     val filteredSongs by homeViewModel.filteredSongs.collectAsState()
     val favoriteSongIds by homeViewModel.favoriteSongIds.collectAsState()
+    val favoriteSongs by homeViewModel.favoriteSongs.collectAsState()
+    val currentLyrics by homeViewModel.currentLyrics.collectAsState()
+    val activeLyricIndex by homeViewModel.activeLyricIndex.collectAsState()
     val playlists by homeViewModel.playlists.collectAsState()
 
     Scaffold(
@@ -87,9 +90,13 @@ fun MainScreen(
                 searchQuery = searchQuery,
                 filteredSongs = filteredSongs,
                 favoriteSongIds = favoriteSongIds,
+                favoriteSongs = favoriteSongs,
                 playlists = playlists,
+                currentLyrics = currentLyrics,
+                activeLyricIndex = activeLyricIndex,
                 onSongSelected = { homeViewModel.playSong(it) },
                 onOnlineSongSelected = { homeViewModel.playOnlineSong(it) },
+                onPlayQueue = { song, queue -> homeViewModel.playFromQueue(song, queue) },
                 onPermissionGranted = { homeViewModel.loadLocalAudioFiles() },
                 onPauseClick = { homeViewModel.pauseSong() },
                 onResumeClick = { homeViewModel.resumeSong() },
@@ -101,7 +108,7 @@ fun MainScreen(
                 onSearchQueryChange = { homeViewModel.updateSearchQuery(it) },
                 onToggleFavorite = { homeViewModel.toggleFavorite(it) },
                 onCreatePlaylist = { homeViewModel.createPlaylist(it) },
-                onAddToPlaylist = { pId, sId -> homeViewModel.addSongToPlaylist(pId, sId) },
+                onAddToPlaylist = { pId, song -> homeViewModel.addSongToPlaylist(pId, song) },
                 onGetPlaylistSongs = { playlistId -> homeViewModel.getPlaylistSongs(playlistId) }
             )
         }

@@ -14,4 +14,5 @@ sealed class Screen(val route: String) {
         fun createRoute(id: Long, name: String) =
             "playlist_detail/$id/${android.net.Uri.encode(name)}"
     }
+    object Favorites : Screen("favorites")
 }

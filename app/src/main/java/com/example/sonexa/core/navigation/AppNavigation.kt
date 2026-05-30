@@ -14,6 +14,7 @@ import com.example.sonexa.feature.online.OnlineScreen
 import com.example.sonexa.feature.player.PlayerScreen
 import com.example.sonexa.feature.search.SearchScreen
 import com.example.sonexa.model.Song
+import com.example.sonexa.core.util.LyricLine
 
 @Composable
 fun AppNavigation(
@@ -26,6 +27,7 @@ fun AppNavigation(
     isShuffleEnabled: Boolean,
     repeatMode: Int,
     onOnlineSongSelected: (Song) -> Unit,
+    onPlayQueue: (Song, List<Song>) -> Unit,
     onSongSelected: (Song) -> Unit,
     onPermissionGranted: () -> Unit,
     onPauseClick: () -> Unit,
@@ -35,19 +37,18 @@ fun AppNavigation(
     onRepeatClick: () -> Unit,
     onNextClick: () -> Unit,
     onPreviousClick: () -> Unit,
-
-    // THE MISSING SEARCH PARAMETERS:
     searchQuery: String,
     filteredSongs: List<Song>,
     onSearchQueryChange: (String) -> Unit,
-
     // Add this to your AppNavigation parameters:
     onGetPlaylistSongs: (Long) -> kotlinx.coroutines.flow.Flow<List<Song>>,
-
     favoriteSongIds: List<Long>,
+    favoriteSongs: List<Song>,
     playlists: List<PlaylistEntity>,
+    currentLyrics: List<LyricLine>,
+    activeLyricIndex: Int,
     onCreatePlaylist: (String) -> Unit,
-    onAddToPlaylist: (Long, Long) -> Unit,
+    onAddToPlaylist: (Long, Song) -> Unit,
     onToggleFavorite: (Song) -> Unit
 ) {
     NavHost(
@@ -111,7 +112,9 @@ fun AppNavigation(
                     // 2. PASS THEM DOWN TO THE PLAYER SCREEN:
                     playlists = playlists,
                     onCreatePlaylist = onCreatePlaylist,
-                    onAddToPlaylist = onAddToPlaylist
+                    onAddToPlaylist = onAddToPlaylist,
+                    currentLyrics = currentLyrics,
+                    activeLyricIndex = activeLyricIndex
                 )
             }
         }
@@ -123,7 +126,7 @@ fun AppNavigation(
                 filteredSongs = filteredSongs,
                 onSearchQueryChange = onSearchQueryChange,
                 onSongClick = { selectedSong ->
-                    onSongSelected(selectedSong)
+                    onPlayQueue(selectedSong, filteredSongs)
                     navController.navigate(Screen.Player.route)
                 }
             )
@@ -135,9 +138,24 @@ fun AppNavigation(
                 playlists = playlists,
                 onPlaylistClick = { playlist ->
                     navController.navigate(Screen.PlaylistDetail.createRoute(playlist.playlistId, playlist.name))
-                }
+                },
+                onFavoritesClick = { navController.navigate(Screen.Favorites.route) }
             )
         }
+
+        composable(Screen.Favorites.route) {
+            com.example.sonexa.feature.library.FavoritesScreen(
+                favoriteSongs = favoriteSongs,
+                onSongClick = { selectedSong ->
+                    // Route it through the online player so it can handle web links!
+                    onPlayQueue(selectedSong, favoriteSongs)
+                    navController.navigate(Screen.Player.route)
+                },
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+
 
         // 2. ADD THE PLAYLIST DETAIL SCREEN
         composable(
@@ -156,7 +174,11 @@ fun AppNavigation(
             PlaylistDetailScreen(
                 playlistName = playlistName,
                 songs = playlistSongs,
-                onSongClick = { onSongSelected(it); navController.navigate(Screen.Player.route) },
+                onSongClick = { selectedSong ->
+                    // 🚨 FIX: Pass the whole playlist queue!
+                    onPlayQueue(selectedSong, playlistSongs)
+                    navController.navigate(Screen.Player.route)
+                },
                 onBackClick = { navController.popBackStack() }
             )
         }
@@ -185,5 +207,7 @@ fun AppNavigation(
         composable(Screen.Settings.route) {
             com.example.sonexa.feature.settings.SettingsScreen()
         }
+
+
     }
 }

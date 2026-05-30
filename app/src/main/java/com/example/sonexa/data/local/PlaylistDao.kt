@@ -25,4 +25,17 @@ interface PlaylistDao {
 
     @Query("SELECT songId FROM playlist_song_cross_ref WHERE playlistId = :playlistId")
     fun getSongIdsInPlaylist(playlistId: Long): Flow<List<Long>>
-}
+
+    // 1. Saves the song snapshot to the cache
+    @androidx.room.Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
+    suspend fun cacheSong(song: SavedSongEntity)
+
+    // 2. Gets the full song data for a specific playlist
+    // Upgrade your query to target only the saved_songs columns
+    @androidx.room.Query("""
+        SELECT saved_songs.* FROM saved_songs 
+        INNER JOIN playlist_song_cross_ref 
+        ON saved_songs.songId = playlist_song_cross_ref.songId 
+        WHERE playlist_song_cross_ref.playlistId = :playlistId
+    """)
+    fun getSongsForPlaylistWithData(playlistId: Long): kotlinx.coroutines.flow.Flow<List<SavedSongEntity>>}

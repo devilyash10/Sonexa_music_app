@@ -24,7 +24,9 @@ import kotlinx.coroutines.flow.map
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
-
+import com.example.sonexa.core.util.LyricLine
+import com.example.sonexa.core.util.LrcParser
+import com.example.sonexa.data.local.SavedSongEntity
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = AudioRepository(application)
@@ -49,6 +51,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // Because Room returns a Flow, this will automatically update the UI whenever the database changes!
     val favoriteSongIds: StateFlow<List<Long>> = favoriteDao.getAllFavoriteSongIds()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+
+    // NEW STATE: Grabs the full song data for the Favorites screen!
+    val favoriteSongs: StateFlow<List<Song>> = favoriteDao.getFavoriteSongsWithData()
+        .map { cachedList ->
+            cachedList.map { cached ->
+                Song(
+                    id = cached.songId,
+                    title = cached.title,
+                    artist = cached.artist,
+                    mediaUri = cached.mediaUri,
+                    artworkUri = cached.artworkUri
+                )
+            }
+        }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     // 1. NEW: Hold the current text the user is typing
     private val _searchQuery = MutableStateFlow("")
@@ -94,6 +111,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _totalDuration = MutableStateFlow(0L)
     val totalDuration: StateFlow<Long> = _totalDuration.asStateFlow()
 
+    private val _currentLyrics = MutableStateFlow<List<LyricLine>>(emptyList())
+    val currentLyrics: StateFlow<List<LyricLine>> = _currentLyrics.asStateFlow()
+
+    private val _activeLyricIndex = MutableStateFlow(-1)
+    val activeLyricIndex: StateFlow<Int> = _activeLyricIndex.asStateFlow()
+
+    private fun loadMockLyrics() {
+        val mockLrc = """
+            [00:15.00]Yeah
+            [00:16.50]I've been tryna call
+            [00:19.00]I've been on my own for long enough
+            [00:23.00]Maybe you can show me how to love, maybe
+            [00:29.00]I'm going through withdrawals
+            [00:32.00]You don't even have to do too much
+            [00:35.50]You can turn me on with just a touch, baby
+            [00:39.00]I look around and Sin City's cold and empty
+            [00:43.00]No one's around to judge me
+            [00:45.50]I can't see clearly when you're gone
+            [00:50.00]I said, ooh, I'm blinded by the lights
+            [00:55.50]No, I can't sleep until I feel your touch
+        """.trimIndent()
+
+        _currentLyrics.value = LrcParser.parse(mockLrc)
+    }
+
     init {
         // Start polling the ExoPlayer state as soon as the ViewModel is created
         updatePlaybackState()
@@ -104,6 +146,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _isPlaying.value = audioController.isPlaying()
                 _currentPosition.value = audioController.getCurrentPosition()
                 _totalDuration.value = audioController.getDuration()
+
+                //THE LYRICS SYNC ENGINE
+                val currentPos = _currentPosition.value
+                val lyrics = _currentLyrics.value
+                if (lyrics.isNotEmpty()) {
+                    // Find the last lyric line whose timestamp is BEFORE or EQUAL to our current position
+                    val activeIndex = lyrics.indexOfLast { it.timeMs <= currentPos }
+                    _activeLyricIndex.value = if (activeIndex != -1) activeIndex else 0
+                }
 
                 // 3. NEW POLLING LOGIC: Sync the UI exactly with ExoPlayer's internal queue
                 _isShuffleEnabled.value = audioController.isShuffleEnabled()
@@ -161,6 +212,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         // Your audioController engine will treat the streaming web link exactly like a local file link!
         audioController.playQueue(onlineQueue, 0)
     }
+    fun playFromQueue(song: Song, queue: List<Song>) {
+        // 1. Force UI update
+        _currentSong.value = song
+        loadMockLyrics()
+
+        // 2. Find exactly where this song is in the provided list
+        val startIndex = queue.indexOfFirst { it.id == song.id }.takeIf { it != -1 } ?: 0
+
+        // 3. Send the FULL queue to ExoPlayer!
+        audioController.playQueue(queue, startIndex)
+    }
 
     // 5. ADD QUEUE CONTROL METHODS
     fun toggleShuffle() {
@@ -197,10 +259,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val entity = FavoriteSongEntity(songId = song.id)
 
             if (isCurrentlyFavorite) {
-                // If it's already liked, remove it
                 favoriteDao.deleteFavorite(entity)
             } else {
-                // If it's not liked, add it
+                // 🚨 NEW: Cache the song data FIRST, then save it as a favorite!
+                val cachedSong = SavedSongEntity(song.id, song.title, song.artist, song.mediaUri, song.artworkUri)
+                favoriteDao.cacheSong(cachedSong)
                 favoriteDao.insertFavorite(entity)
             }
         }
@@ -232,19 +295,33 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addSongToPlaylist(playlistId: Long, songId: Long) {
+    fun addSongToPlaylist(playlistId: Long, song: Song) { // 🚨 Note: Changed parameter from songId: Long to song: Song
         viewModelScope.launch {
+            // 🚨 NEW: Cache the song data FIRST
+            val cachedSong = SavedSongEntity(song.id, song.title, song.artist, song.mediaUri, song.artworkUri)
+            playlistDao.cacheSong(cachedSong)
+
             playlistDao.insertSongIntoPlaylist(
-                PlaylistSongCrossRef(playlistId = playlistId, songId = songId)
+                PlaylistSongCrossRef(playlistId = playlistId, songId = song.id)
             )
         }
     }
 
     // NEW: Fetches the actual Song objects for a specific playlist
     fun getPlaylistSongs(playlistId: Long): Flow<List<Song>> {
-        return playlistDao.getSongIdsInPlaylist(playlistId).map { songIds ->
-            // Match the IDs from the database with the real songs on the device
-            _songs.value.filter { songIds.contains(it.id) }
+        // We read the SQL Join from the cache, and map it back to your standard UI Song object!
+        return playlistDao.getSongsForPlaylistWithData(playlistId).map { cachedList ->
+            cachedList.map { cached ->
+                Song(
+                    id = cached.songId,
+                    title = cached.title,
+                    artist = cached.artist,
+                    mediaUri = cached.mediaUri,
+                    artworkUri = cached.artworkUri
+                )
+            }
         }
     }
+
+
 }

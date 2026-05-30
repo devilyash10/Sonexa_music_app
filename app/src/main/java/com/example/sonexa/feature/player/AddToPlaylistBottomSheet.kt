@@ -26,7 +26,7 @@ fun AddToPlaylistBottomSheet(
     playlists: List<PlaylistEntity>,
     onDismiss: () -> Unit,
     onCreatePlaylist: (String) -> Unit,
-    onAddToPlaylist: (Long, Long) -> Unit
+    onAddToPlaylist: (Long, Song) -> Unit
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
 
@@ -66,7 +66,9 @@ fun AddToPlaylistBottomSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    onAddToPlaylist(playlist.playlistId, song.id)
+                                    // 🚨 EXACT FIX: Removed '.id' so it passes the whole song object!
+                                    onAddToPlaylist(playlist.playlistId, song)
+
                                     Toast.makeText(
                                         context,
                                         "${song.title} added to ${playlist.name}",
