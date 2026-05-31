@@ -23,10 +23,12 @@ import com.example.sonexa.core.navigation.AppNavigation
 import com.example.sonexa.core.navigation.Screen
 import com.example.sonexa.feature.home.HomeViewModel
 import com.example.sonexa.feature.player.MiniPlayer
+import com.example.sonexa.feature.settings.SettingsViewModel
 
 @Composable
 fun MainScreen(
-    homeViewModel: HomeViewModel = viewModel()
+    homeViewModel: HomeViewModel = viewModel(),
+    settingsViewModel: SettingsViewModel
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -94,6 +96,7 @@ fun MainScreen(
                 playlists = playlists,
                 currentLyrics = currentLyrics,
                 activeLyricIndex = activeLyricIndex,
+                settingsViewModel = settingsViewModel,
                 onSongSelected = { homeViewModel.playSong(it) },
                 onOnlineSongSelected = { homeViewModel.playOnlineSong(it) },
                 onPlayQueue = { song, queue -> homeViewModel.playFromQueue(song, queue) },

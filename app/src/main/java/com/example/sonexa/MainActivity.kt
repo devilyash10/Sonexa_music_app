@@ -9,20 +9,29 @@ import com.example.sonexa.ui.theme.SonexaTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import com.example.sonexa.core.ui.MainScreen
+import androidx.activity.viewModels
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.example.sonexa.feature.settings.SettingsViewModel
 
 
 class MainActivity : ComponentActivity() {
+
+    private val settingsViewModel by viewModels<SettingsViewModel>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
         setContent {
-            SonexaTheme {
+            val isAmoled by settingsViewModel.isAmoledGoldEnabled.collectAsState()
+            SonexaTheme(isAmoled = isAmoled) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     // Just call MainScreen!
-                    MainScreen()
+                    MainScreen(settingsViewModel = settingsViewModel)
                 }
             }
         }

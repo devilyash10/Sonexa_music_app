@@ -1,6 +1,7 @@
 package com.example.sonexa.feature.home
 
 import android.app.Application
+import android.content.ContentUris
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sonexa.core.media.AudioController
@@ -22,13 +23,19 @@ import com.example.sonexa.data.local.PlaylistSongCrossRef
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import com.example.sonexa.core.util.LyricLine
 import com.example.sonexa.core.util.LrcParser
 import com.example.sonexa.data.local.SavedSongEntity
+import com.example.sonexa.feature.settings.SettingsManager
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collectLatest
+
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val settingsManager = SettingsManager(application)
     private val repository = AudioRepository(application)
 
     // 1. Initialize our new remote control
@@ -47,6 +54,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
 
+    init {
+        // 🚨 OBSERVE THE FLOW: Whenever the user flips the toggle, this auto-triggers!
+        viewModelScope.launch {
+            settingsManager.smartScanFlow.collectLatest { isSmartScanOn ->
+                loadLocalAudioFiles(isSmartScanOn)
+            }
+        }
+    }
     // 2. NEW STATE: A list of all liked song IDs.
     // Because Room returns a Flow, this will automatically update the UI whenever the database changes!
     val favoriteSongIds: StateFlow<List<Long>> = favoriteDao.getAllFavoriteSongIds()
@@ -188,7 +203,83 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun loadLocalAudioFiles() {
         viewModelScope.launch {
-            _songs.value = repository.getAudioFiles()
+            // Read the current setting instantly and pass it to the private engine
+            val isSmartScanOn = settingsManager.smartScanFlow.first()
+            loadLocalAudioFiles(isSmartScanOn) // Calls the private function below!
+        }
+    }
+    private fun loadLocalAudioFiles(isSmartScanOn: Boolean) {
+        try {
+            val audioList = mutableListOf<Song>()
+            val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+
+            val projection = arrayOf(
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.DURATION,
+                MediaStore.Audio.Media.RELATIVE_PATH, // Safe for Scoped Storage on Android 11-16
+                MediaStore.Audio.Media.ALBUM_ID
+            )
+
+            // Baseline check for valid music items
+            val selectionClause = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+
+            val cursor = getApplication<Application>().contentResolver.query(
+                collection, projection, selectionClause, null, "${MediaStore.Audio.Media.TITLE} ASC"
+            )
+
+            cursor?.use {
+                val idColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val durationColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val pathColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
+
+                while (it.moveToNext()) {
+                    val id = it.getLong(idColumn)
+                    val title = it.getString(titleColumn) ?: "Unknown Title"
+                    val artist = it.getString(artistColumn) ?: "Unknown Artist"
+                    val duration = it.getLong(durationColumn)
+                    val relativePath = it.getString(pathColumn) ?: ""
+
+                    if (isSmartScanOn) {
+                        val isJunk = relativePath.contains("WhatsApp", ignoreCase = true) ||
+                                relativePath.contains("Telegram", ignoreCase = true) ||
+                                relativePath.contains("Voice Recorder", ignoreCase = true) ||
+                                relativePath.contains("Snapchat", ignoreCase = true)
+                        if (isJunk) continue
+                    }
+
+                    // 🚨 NEW: Fetch the Album Art ID!
+                    val albumIdColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+                    val albumId = it.getLong(albumIdColumn)
+
+                    // 🚨 NEW: Create the Image Link!
+                    val artworkUri = android.net.Uri.parse("content://media/external/audio/albumart")
+                        .buildUpon()
+                        .appendPath(albumId.toString())
+                        .build()
+                        .toString()
+
+                    val mediaUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+
+                    audioList.add(
+                        Song(
+                            id = id,
+                            title = title,
+                            artist = artist,
+                            mediaUri = mediaUri.toString(),
+                            artworkUri = artworkUri // 🚨 Pass it into the Song here!
+                        )
+                    )
+                }
+            }
+            _songs.value = audioList
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            _songs.value = emptyList()
         }
     }
 

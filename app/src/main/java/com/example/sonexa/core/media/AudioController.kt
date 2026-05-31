@@ -19,6 +19,10 @@ class AudioController(private val context: Context) {
     private var mediaControllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
 
+    // Grab the active session ID so our custom Equalizer can latch onto it!
+    val audioSessionId: Int
+        get() = AudioService.activeAudioSessionId
+
     init {
         initController()
     }

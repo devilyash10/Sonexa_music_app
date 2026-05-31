@@ -15,6 +15,8 @@ import com.example.sonexa.feature.player.PlayerScreen
 import com.example.sonexa.feature.search.SearchScreen
 import com.example.sonexa.model.Song
 import com.example.sonexa.core.util.LyricLine
+import com.example.sonexa.feature.settings.SettingsViewModel
+import com.example.sonexa.service.AudioService
 
 @Composable
 fun AppNavigation(
@@ -49,7 +51,8 @@ fun AppNavigation(
     activeLyricIndex: Int,
     onCreatePlaylist: (String) -> Unit,
     onAddToPlaylist: (Long, Song) -> Unit,
-    onToggleFavorite: (Song) -> Unit
+    onToggleFavorite: (Song) -> Unit,
+    settingsViewModel: SettingsViewModel
 ) {
     NavHost(
         navController = navController,
@@ -205,9 +208,18 @@ fun AppNavigation(
         }
 
         composable(Screen.Settings.route) {
-            com.example.sonexa.feature.settings.SettingsScreen()
+            com.example.sonexa.feature.settings.SettingsScreen(
+                settingsViewModel = settingsViewModel,
+                onNavigateToEqualizer = { navController.navigate("custom_eq") }
+            )
         }
 
+        composable("custom_eq") {
+            com.example.sonexa.feature.settings.CustomEqualizerScreen(
+                audioSessionId = com.example.sonexa.service.AudioService.activeAudioSessionId,
+                onBackClick = { navController.popBackStack() }
+            )
+        }
 
     }
 }

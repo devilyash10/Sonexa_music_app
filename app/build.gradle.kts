@@ -82,6 +82,8 @@ dependencies {
     // Retrofit & Networking for Epic 8
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    // OkHttp for logging(ability given to app to write to local storage)
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
 }
 // Add this at the bottom of the file
 ksp {
