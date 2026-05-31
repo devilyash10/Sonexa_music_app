@@ -15,7 +15,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -25,11 +27,14 @@ import com.example.sonexa.service.AudioService
 @Composable
 fun SettingsScreen(
     settingsViewModel: SettingsViewModel = viewModel(),
-    onNavigateToEqualizer: () -> Unit // 🚨 The explicit interface handshake
+    onNavigateToEqualizer: () -> Unit
 ) {
     val isAmoledGold by settingsViewModel.isAmoledGoldEnabled.collectAsState()
     val isSmartScan by settingsViewModel.isSmartScanEnabled.collectAsState()
+
     val context = LocalContext.current
+    // 🚨 1. Initialize the Haptic Engine
+    val haptic = LocalHapticFeedback.current
 
     val neonGold = Color(0xFFFFD700)
 
@@ -49,7 +54,7 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp)
         ) {
 
-            // --- 1. APPEARANCE SECTION ---
+            // --- APPEARANCE SECTION ---
             Text(
                 text = "APPEARANCE",
                 style = MaterialTheme.typography.labelMedium,
@@ -77,7 +82,11 @@ fun SettingsScreen(
                     }
                     Switch(
                         checked = isAmoledGold,
-                        onCheckedChange = { settingsViewModel.toggleAmoledTheme(it) },
+                        onCheckedChange = {
+                            // 🚨 2. Fire the vibration motor when toggled!
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            settingsViewModel.toggleAmoledTheme(it)
+                        },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = neonGold,
                             checkedTrackColor = neonGold.copy(alpha = 0.3f)
@@ -88,7 +97,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- 2. AUDIO ENGINE SECTION ---
+            // --- AUDIO ENGINE SECTION ---
             Text(
                 text = "AUDIO ENGINE",
                 style = MaterialTheme.typography.labelMedium,
@@ -98,7 +107,8 @@ fun SettingsScreen(
 
             Surface(
                 onClick = {
-                    // Check if Media3 has registered an active pipeline session ID
+                    // 🚨 3. Physical click when opening the EQ
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     if (AudioService.activeAudioSessionId > 0) {
                         onNavigateToEqualizer()
                     } else {
@@ -128,7 +138,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- 3. LIBRARY SECTION ---
+            // --- LIBRARY SECTION ---
             Text(
                 text = "LIBRARY",
                 style = MaterialTheme.typography.labelMedium,
@@ -156,7 +166,11 @@ fun SettingsScreen(
                     }
                     Switch(
                         checked = isSmartScan,
-                        onCheckedChange = { settingsViewModel.toggleSmartScanner(it) },
+                        onCheckedChange = {
+                            // 🚨 4. Fire the vibration motor when toggled!
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            settingsViewModel.toggleSmartScanner(it)
+                        },
                         colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
                     )
                 }

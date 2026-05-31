@@ -3,6 +3,9 @@ package com.example.sonexa.core.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -16,13 +19,17 @@ import com.example.sonexa.feature.search.SearchScreen
 import com.example.sonexa.model.Song
 import com.example.sonexa.core.util.LyricLine
 import com.example.sonexa.feature.settings.SettingsViewModel
-import com.example.sonexa.service.AudioService
 
 @Composable
 fun AppNavigation(
     navController: NavHostController,
     currentSong: Song?,
     songs: List<Song>,
+
+    // 🚨 1. NEW DATA ARGS: Passed down from MainScreen
+    recentlyPlayed: List<Song>,
+    mostPlayed: List<Song>,
+
     isPlaying: Boolean,
     currentPosition: Long,
     totalDuration: Long,
@@ -32,6 +39,10 @@ fun AppNavigation(
     onPlayQueue: (Song, List<Song>) -> Unit,
     onSongSelected: (Song) -> Unit,
     onPermissionGranted: () -> Unit,
+
+    // 🚨 2. NEW ACTION ARG: For the Shuffle all button
+    onShufflePlayAll: () -> Unit,
+
     onPauseClick: () -> Unit,
     onResumeClick: () -> Unit,
     onSeek: (Long) -> Unit,
@@ -42,7 +53,6 @@ fun AppNavigation(
     searchQuery: String,
     filteredSongs: List<Song>,
     onSearchQueryChange: (String) -> Unit,
-    // Add this to your AppNavigation parameters:
     onGetPlaylistSongs: (Long) -> kotlinx.coroutines.flow.Flow<List<Song>>,
     favoriteSongIds: List<Long>,
     favoriteSongs: List<Song>,
@@ -59,34 +69,41 @@ fun AppNavigation(
         startDestination = Screen.Home.route
     ) {
         composable(Screen.Home.route) {
+
+            // 🚨 3. BOTTOM SHEET STATE: Tracks which song is being added to a playlist
+            var songForPlaylist by remember { mutableStateOf<Song?>(null) }
+
+            if (songForPlaylist != null) {
+                com.example.sonexa.feature.player.AddToPlaylistBottomSheet(
+                    song = songForPlaylist!!,
+                    playlists = playlists,
+                    onDismiss = { songForPlaylist = null },
+                    onCreatePlaylist = onCreatePlaylist,
+                    onAddToPlaylist = { playlistId, song ->
+                        onAddToPlaylist(playlistId, song)
+                        songForPlaylist = null // Auto-close sheet after adding!
+                    }
+                )
+            }
+
             HomeScreen(
                 songs = songs,
-                onSongClick = { songTitle ->
-                    val selectedSong = songs.find { it.title == songTitle }
-                    if (selectedSong != null) {
-                        onSongSelected(selectedSong)
-                        navController.navigate(Screen.Player.route)
-                    }
+                recentlyPlayed = recentlyPlayed,
+                mostPlayed = mostPlayed,
+                favoriteSongIds = favoriteSongIds,
+                onSongClick = { song ->
+                    // Play the song and jump to the Player Screen!
+                    onPlayQueue(song, songs)
+                    navController.navigate(Screen.Player.route)
                 },
                 onSearchClick = { navController.navigate(Screen.Search.route) },
                 onPermissionGranted = onPermissionGranted,
-                onShufflePlayClick = {
-                    if (songs.isNotEmpty()) {
-                        val randomSong = songs.random()
-                        onSongSelected(randomSong)
-                        if (!isShuffleEnabled) {
-                            onShuffleClick()
-                        }
-                    }
-                },
-
-                // 🚨 ADD THIS BLOCK: It perfectly mimics clicking the bottom bar!
-                onNavigateToOnline = {
-                    navController.navigate(Screen.Online.route) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
+                onShufflePlayClick = onShufflePlayAll, // Trigger the shuffle engine
+                onNavigateToOnline = { navController.navigate(Screen.Online.route) }, // 🚨 Fixed Route
+                onToggleFavorite = onToggleFavorite,
+                onAddToPlaylistClick = { song ->
+                    // Trigger the bottom sheet to slide up!
+                    songForPlaylist = song
                 }
             )
         }
@@ -111,8 +128,6 @@ fun AppNavigation(
                     onRepeatClick = onRepeatClick,
                     onNextClick = onNextClick,
                     onPreviousClick = onPreviousClick,
-
-                    // 2. PASS THEM DOWN TO THE PLAYER SCREEN:
                     playlists = playlists,
                     onCreatePlaylist = onCreatePlaylist,
                     onAddToPlaylist = onAddToPlaylist,
@@ -123,7 +138,6 @@ fun AppNavigation(
         }
 
         composable(Screen.Search.route) {
-            // Passing the search data directly into the Search UI!
             SearchScreen(
                 searchQuery = searchQuery,
                 filteredSongs = filteredSongs,
@@ -135,7 +149,6 @@ fun AppNavigation(
             )
         }
 
-        // 1. UPDATE THE LIBRARY SCREEN
         composable(Screen.Library.route) {
             LibraryScreen(
                 playlists = playlists,
@@ -150,7 +163,6 @@ fun AppNavigation(
             com.example.sonexa.feature.library.FavoritesScreen(
                 favoriteSongs = favoriteSongs,
                 onSongClick = { selectedSong ->
-                    // Route it through the online player so it can handle web links!
                     onPlayQueue(selectedSong, favoriteSongs)
                     navController.navigate(Screen.Player.route)
                 },
@@ -158,9 +170,6 @@ fun AppNavigation(
             )
         }
 
-
-
-        // 2. ADD THE PLAYLIST DETAIL SCREEN
         composable(
             route = Screen.PlaylistDetail.route,
             arguments = listOf(
@@ -171,37 +180,30 @@ fun AppNavigation(
             val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: 0L
             val playlistName = backStackEntry.arguments?.getString("playlistName") ?: "Unknown"
 
-            // Collect the specific songs for this playlist directly from the ViewModel!
             val playlistSongs by onGetPlaylistSongs(playlistId).collectAsState(initial = emptyList())
 
             PlaylistDetailScreen(
                 playlistName = playlistName,
                 songs = playlistSongs,
                 onSongClick = { selectedSong ->
-                    // 🚨 FIX: Pass the whole playlist queue!
                     onPlayQueue(selectedSong, playlistSongs)
                     navController.navigate(Screen.Player.route)
                 },
                 onBackClick = { navController.popBackStack() }
             )
         }
+
         composable(Screen.Online.route) {
             OnlineScreen(
                 onOnlineSongClick = { onlineSong ->
-                    // Convert the DTO schema to your app's native data structure
                     val mappedSong = Song(
                         id = onlineSong.trackId,
                         title = onlineSong.trackName ?: "Unknown Track",
                         artist = onlineSong.artistName ?: "Unknown Artist",
-                        // Apple previews use a standard direct audio streaming stream url
                         mediaUri = onlineSong.previewUrl ?: "",
                         artworkUri = onlineSong.artworkUrl?.replace("100x100bb", "500x500bb") ?: ""
                     )
-
-                    // Route directly through the unified service stream pipeline
                     onOnlineSongSelected(mappedSong)
-
-                    // Transition smoothly into the locked master blueprint player view
                     navController.navigate(Screen.Player.route)
                 }
             )
@@ -220,6 +222,5 @@ fun AppNavigation(
                 onBackClick = { navController.popBackStack() }
             )
         }
-
     }
 }

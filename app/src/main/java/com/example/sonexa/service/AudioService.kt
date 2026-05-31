@@ -1,31 +1,67 @@
 package com.example.sonexa.service
 
-//import android.content.Intent
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.example.sonexa.data.local.SonexaDatabase
+import com.example.sonexa.data.local.SongStatsEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class AudioService : MediaSessionService() {
+
     companion object {
         var activeAudioSessionId: Int = 0
     }
+
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
 
-    // 1. Called when the service is first created
+    // Service-level lifecycle scope for database writes
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
 
-        // Initialize ExoPlayer
         player = ExoPlayer.Builder(this).build()
 
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                // When ExoPlayer says "I am ready to play music"...
                 if (playbackState == Player.STATE_READY) {
-                    // ...the hardware audio track is guaranteed to exist. Grab the ID!
                     activeAudioSessionId = player.audioSessionId
+                }
+            }
+
+            // 🚨 TRACK TRANSITIONS: Fires whenever a new song starts playing
+            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                super.onMediaItemTransition(mediaItem, reason)
+
+                val currentMediaId = mediaItem?.mediaId?.toLongOrNull() ?: return
+
+                serviceScope.launch {
+                    val database = SonexaDatabase.getDatabase(this@AudioService)
+                    val statsDao = database.songStatsDao()
+                    val currentTimestamp = System.currentTimeMillis()
+
+                    // Check if a entry already exists for this song
+                    val existingStats = statsDao.getStatsForSong(currentMediaId)
+
+                    if (existingStats == null) {
+                        // First time playing this track
+                        statsDao.insertOrUpdateStats(
+                            SongStatsEntity(
+                                mediaId = currentMediaId,
+                                playCount = 1,
+                                lastPlayedTimestamp = currentTimestamp
+                            )
+                        )
+                    } else {
+                        // Increment play count and update the timestamp
+                        statsDao.recordPlay(currentMediaId, currentTimestamp)
+                    }
                 }
             }
         })
@@ -33,15 +69,13 @@ class AudioService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, player).build()
     }
 
-    // 2. The system calls this to figure out which session this service is running
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
         return mediaSession
     }
 
-    // 3. Called when the service is destroyed (e.g., user force-closes the app)
     override fun onDestroy() {
         mediaSession?.run {
-            player.release() // VERY IMPORTANT: Free up system resources!
+            player.release()
             release()
         }
         super.onDestroy()

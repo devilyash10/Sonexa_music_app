@@ -38,37 +38,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsManager = SettingsManager(application)
     private val repository = AudioRepository(application)
 
-    // 1. Initialize our new remote control
     private val audioController = AudioController(application)
 
-    // 1. INITIALIZE THE DATABASE DAO
-    private val favoriteDao = SonexaDatabase.getDatabase(application).favoriteDao()
+    // --- CENTRALIZED DATABASE INITIALIZATION ---
+    private val database = SonexaDatabase.getDatabase(application)
+    private val favoriteDao = database.favoriteDao()
+    private val playlistDao = database.playlistDao()
+    private val songStatsDao = database.songStatsDao() // 🚨 NEW: Strike 2 Stats Engine
 
-    // INITIALIZE PLAYLIST DAO
-    private val playlistDao = SonexaDatabase.getDatabase(application).playlistDao()
-
-    // NEW STATE: List of all custom playlists (Updates automatically!)
+    // --- PLAYLISTS & FAVORITES ---
     val playlists: StateFlow<List<PlaylistEntity>> = playlistDao.getAllPlaylists()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    private val _songs = MutableStateFlow<List<Song>>(emptyList())
-    val songs: StateFlow<List<Song>> = _songs.asStateFlow()
-
-    init {
-        // 🚨 OBSERVE THE FLOW: Whenever the user flips the toggle, this auto-triggers!
-        viewModelScope.launch {
-            settingsManager.smartScanFlow.collectLatest { isSmartScanOn ->
-                loadLocalAudioFiles(isSmartScanOn)
-            }
-        }
-    }
-    // 2. NEW STATE: A list of all liked song IDs.
-    // Because Room returns a Flow, this will automatically update the UI whenever the database changes!
     val favoriteSongIds: StateFlow<List<Long>> = favoriteDao.getAllFavoriteSongIds()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-
-    // NEW STATE: Grabs the full song data for the Favorites screen!
     val favoriteSongs: StateFlow<List<Song>> = favoriteDao.getFavoriteSongsWithData()
         .map { cachedList ->
             cachedList.map { cached ->
@@ -82,41 +66,48 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    // 1. NEW: Hold the current text the user is typing
+
+    // --- MASTER SONG LISTS ---
+    private val _songs = MutableStateFlow<List<Song>>(emptyList())
+    val songs: StateFlow<List<Song>> = _songs.asStateFlow()
+
+    // 🚨 NEW: RECENTLY PLAYED STATE FLOW
+    private val _recentlyPlayed = MutableStateFlow<List<Song>>(emptyList())
+    val recentlyPlayed: StateFlow<List<Song>> = _recentlyPlayed.asStateFlow()
+
+    // 🚨 NEW: MOST PLAYED STATE FLOW
+    private val _mostPlayed = MutableStateFlow<List<Song>>(emptyList())
+    val mostPlayed: StateFlow<List<Song>> = _mostPlayed.asStateFlow()
+
+    // --- SEARCH LOGIC ---
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    // 2. NEW: Automatically filter the songs!
-    // This watches BOTH _songs and _searchQuery. If either changes, it instantly recalculates.
     val filteredSongs: StateFlow<List<Song>> = combine(_songs, _searchQuery) { songList, query ->
         if (query.isBlank()) {
-            songList // If search is empty, show all songs
+            songList
         } else {
             songList.filter {
-                // Search by both Title and Artist!
                 it.title.contains(query, ignoreCase = true) ||
                         it.artist.contains(query, ignoreCase = true)
             }
         }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    // 3. NEW: A function for the UI to call when the user types
     fun updateSearchQuery(newQuery: String) {
         _searchQuery.value = newQuery
     }
 
-    // 1. NEW STATE: The ViewModel now tracks the current song globally
+    // --- PLAYBACK STATES ---
     private val _currentSong = MutableStateFlow<Song?>(null)
     val currentSong: StateFlow<Song?> = _currentSong.asStateFlow()
 
-    // 2. NEW STATES: Shuffle and Repeat
     private val _isShuffleEnabled = MutableStateFlow(false)
     val isShuffleEnabled: StateFlow<Boolean> = _isShuffleEnabled.asStateFlow()
 
     private val _repeatMode = MutableStateFlow(Player.REPEAT_MODE_OFF)
     val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
 
-    // --- NEW REAL PLAYBACK STATES ---
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
@@ -152,9 +143,37 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
-        // Start polling the ExoPlayer state as soon as the ViewModel is created
+        // 1. Observe Settings
+        viewModelScope.launch {
+            settingsManager.smartScanFlow.collectLatest { isSmartScanOn ->
+                loadLocalAudioFiles(isSmartScanOn)
+            }
+        }
+
+        // 2. 🚨 THE NEW LIVE COMBINATOR ENGINE FOR STATS
+        viewModelScope.launch {
+            combine(_songs, songStatsDao.getAllSongStats()) { masterList, statsList ->
+                Pair(masterList, statsList)
+            }.collect { (masterList, statsList) ->
+
+                val statsMap = statsList.associateBy { it.mediaId }
+
+                _recentlyPlayed.value = masterList
+                    .filter { statsMap.containsKey(it.id) && (statsMap[it.id]?.lastPlayedTimestamp ?: 0L) > 0L }
+                    .sortedByDescending { statsMap[it.id]?.lastPlayedTimestamp ?: 0L }
+                    .take(10)
+
+                _mostPlayed.value = masterList
+                    .filter { statsMap.containsKey(it.id) && (statsMap[it.id]?.playCount ?: 0) > 0 }
+                    .sortedByDescending { statsMap[it.id]?.playCount ?: 0 }
+                    .take(10)
+            }
+        }
+
+        // 3. Start Player Loop
         updatePlaybackState()
     }
+
     private fun updatePlaybackState() {
         viewModelScope.launch {
             while (true) {
@@ -162,29 +181,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _currentPosition.value = audioController.getCurrentPosition()
                 _totalDuration.value = audioController.getDuration()
 
-                //THE LYRICS SYNC ENGINE
                 val currentPos = _currentPosition.value
                 val lyrics = _currentLyrics.value
                 if (lyrics.isNotEmpty()) {
-                    // Find the last lyric line whose timestamp is BEFORE or EQUAL to our current position
                     val activeIndex = lyrics.indexOfLast { it.timeMs <= currentPos }
                     _activeLyricIndex.value = if (activeIndex != -1) activeIndex else 0
                 }
 
-                // 3. NEW POLLING LOGIC: Sync the UI exactly with ExoPlayer's internal queue
                 _isShuffleEnabled.value = audioController.isShuffleEnabled()
                 _repeatMode.value = audioController.getRepeatMode()
 
                 val mediaId = audioController.getCurrentMediaId()
-                val mediaItem = audioController.getCurrentMediaItem() // Reads the raw ExoPlayer data
+                val mediaItem = audioController.getCurrentMediaItem()
 
                 if (mediaId != null && mediaItem != null) {
                     val songId = mediaId.toLongOrNull() ?: 0L
-
-                    // 1. Try to find the song in your local storage
                     val localSong = _songs.value.find { it.id == songId }
-
-                    // 2. If it's NOT local, reconstruct it from the ExoPlayer web stream!
                     val activeSong = localSong ?: Song(
                         id = songId,
                         title = mediaItem.mediaMetadata.title?.toString() ?: "Unknown Track",
@@ -192,8 +204,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         mediaUri = mediaItem.localConfiguration?.uri?.toString() ?: "",
                         artworkUri = mediaItem.mediaMetadata.artworkUri?.toString() ?: ""
                     )
-
-                    // 3. Update the UI safely so it never goes black!
                     _currentSong.value = activeSong
                 }
 
@@ -201,13 +211,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
     fun loadLocalAudioFiles() {
         viewModelScope.launch {
-            // Read the current setting instantly and pass it to the private engine
             val isSmartScanOn = settingsManager.smartScanFlow.first()
-            loadLocalAudioFiles(isSmartScanOn) // Calls the private function below!
+            loadLocalAudioFiles(isSmartScanOn)
         }
     }
+
     private fun loadLocalAudioFiles(isSmartScanOn: Boolean) {
         try {
             val audioList = mutableListOf<Song>()
@@ -218,11 +229,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 MediaStore.Audio.Media.TITLE,
                 MediaStore.Audio.Media.ARTIST,
                 MediaStore.Audio.Media.DURATION,
-                MediaStore.Audio.Media.RELATIVE_PATH, // Safe for Scoped Storage on Android 11-16
+                MediaStore.Audio.Media.RELATIVE_PATH,
                 MediaStore.Audio.Media.ALBUM_ID
             )
 
-            // Baseline check for valid music items
             val selectionClause = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
 
             val cursor = getApplication<Application>().contentResolver.query(
@@ -233,15 +243,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val idColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val titleColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
                 val artistColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-                val durationColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val pathColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
+                val albumIdColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
 
                 while (it.moveToNext()) {
                     val id = it.getLong(idColumn)
                     val title = it.getString(titleColumn) ?: "Unknown Title"
                     val artist = it.getString(artistColumn) ?: "Unknown Artist"
-                    val duration = it.getLong(durationColumn)
                     val relativePath = it.getString(pathColumn) ?: ""
+                    val albumId = it.getLong(albumIdColumn)
 
                     if (isSmartScanOn) {
                         val isJunk = relativePath.contains("WhatsApp", ignoreCase = true) ||
@@ -251,11 +261,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         if (isJunk) continue
                     }
 
-                    // 🚨 NEW: Fetch the Album Art ID!
-                    val albumIdColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-                    val albumId = it.getLong(albumIdColumn)
-
-                    // 🚨 NEW: Create the Image Link!
                     val artworkUri = android.net.Uri.parse("content://media/external/audio/albumart")
                         .buildUpon()
                         .appendPath(albumId.toString())
@@ -270,7 +275,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             title = title,
                             artist = artist,
                             mediaUri = mediaUri.toString(),
-                            artworkUri = artworkUri // 🚨 Pass it into the Song here!
+                            artworkUri = artworkUri
                         )
                     )
                 }
@@ -283,7 +288,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 2. Expose playback methods to the UI
+    // --- PLAYER CONTROLS ---
     fun playSong(song: Song) {
         val currentSongs = _songs.value
         val startIndex = currentSongs.indexOf(song)
@@ -291,31 +296,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             audioController.playQueue(currentSongs, startIndex)
         }
     }
-    // 🚨 FIX 2: A dedicated player function for web streams
+
     fun playOnlineSong(song: Song) {
-        // 1. Force the reactive state flow to update so the player view loads the metadata instantly
         _currentSong.value = song
-
-        // 2. Wrap the isolated streaming track in a single-element playback collection
         val onlineQueue = listOf(song)
-
-        // 3. Dispatch directly to your existing background audio architecture
-        // Your audioController engine will treat the streaming web link exactly like a local file link!
         audioController.playQueue(onlineQueue, 0)
     }
+
     fun playFromQueue(song: Song, queue: List<Song>) {
-        // 1. Force UI update
         _currentSong.value = song
         loadMockLyrics()
-
-        // 2. Find exactly where this song is in the provided list
         val startIndex = queue.indexOfFirst { it.id == song.id }.takeIf { it != -1 } ?: 0
-
-        // 3. Send the FULL queue to ExoPlayer!
         audioController.playQueue(queue, startIndex)
     }
 
-    // 5. ADD QUEUE CONTROL METHODS
     fun toggleShuffle() {
         val newShuffleState = !_isShuffleEnabled.value
         audioController.toggleShuffle(newShuffleState)
@@ -330,20 +324,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         audioController.setRepeatMode(newMode)
     }
 
-    fun pauseSong() {
-        audioController.pause()
-    }
-
-    fun resumeSong() {
-        audioController.resume()
-    }
-    // NEW: Allow the user to drag the progress bar
+    fun pauseSong() = audioController.pause()
+    fun resumeSong() = audioController.resume()
     fun seekTo(position: Long) = audioController.seekTo(position)
-
     fun skipToNext() = audioController.skipToNext()
     fun skipToPrevious() = audioController.skipToPrevious()
 
-    // 3. NEW FUNCTIONS: The UI will call this when the user clicks the Heart icon
     fun toggleFavorite(song: Song) {
         viewModelScope.launch {
             val isCurrentlyFavorite = favoriteSongIds.value.contains(song.id)
@@ -352,7 +338,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             if (isCurrentlyFavorite) {
                 favoriteDao.deleteFavorite(entity)
             } else {
-                // 🚨 NEW: Cache the song data FIRST, then save it as a favorite!
                 val cachedSong = SavedSongEntity(song.id, song.title, song.artist, song.mediaUri, song.artworkUri)
                 favoriteDao.cacheSong(cachedSong)
                 favoriteDao.insertFavorite(entity)
@@ -362,18 +347,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        // 3. Clean up the connection when the ViewModel dies
         audioController.release()
     }
-    // NEW: Kickstart a shuffled playlist from the Home Screen
+
     fun shuffleAndPlayAll() {
         val currentList = _songs.value
         if (currentList.isNotEmpty()) {
-            // 1. Force ExoPlayer's shuffle mode ON
-            if (!_isShuffleEnabled.value) {
-                toggleShuffle()
-            }
-            // 2. Pick a random song to start the queue
+            if (!_isShuffleEnabled.value) toggleShuffle()
             playSong(currentList.random())
         }
     }
@@ -386,21 +366,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addSongToPlaylist(playlistId: Long, song: Song) { // 🚨 Note: Changed parameter from songId: Long to song: Song
+    fun addSongToPlaylist(playlistId: Long, song: Song) {
         viewModelScope.launch {
-            // 🚨 NEW: Cache the song data FIRST
             val cachedSong = SavedSongEntity(song.id, song.title, song.artist, song.mediaUri, song.artworkUri)
             playlistDao.cacheSong(cachedSong)
-
             playlistDao.insertSongIntoPlaylist(
                 PlaylistSongCrossRef(playlistId = playlistId, songId = song.id)
             )
         }
     }
 
-    // NEW: Fetches the actual Song objects for a specific playlist
     fun getPlaylistSongs(playlistId: Long): Flow<List<Song>> {
-        // We read the SQL Join from the cache, and map it back to your standard UI Song object!
         return playlistDao.getSongsForPlaylistWithData(playlistId).map { cachedList ->
             cachedList.map { cached ->
                 Song(
@@ -413,6 +389,4 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
-
-
 }

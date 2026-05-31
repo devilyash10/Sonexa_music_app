@@ -50,6 +50,8 @@ fun MainScreen(
     val currentLyrics by homeViewModel.currentLyrics.collectAsState()
     val activeLyricIndex by homeViewModel.activeLyricIndex.collectAsState()
     val playlists by homeViewModel.playlists.collectAsState()
+    val recentlyPlayed by homeViewModel.recentlyPlayed.collectAsState()
+    val mostPlayed by homeViewModel.mostPlayed.collectAsState()
 
     Scaffold(
         bottomBar = {
@@ -68,7 +70,8 @@ fun MainScreen(
                             onNavigateToPlayer = { navController.navigate(Screen.Player.route) },
                             onPauseClick = { homeViewModel.pauseSong() },
                             onResumeClick = { homeViewModel.resumeSong() },
-                            onNextClick = { homeViewModel.skipToNext() }
+                            onNextClick = { homeViewModel.skipToNext() },
+                            onPreviousClick = { homeViewModel.skipToPrevious() }
                         )
                     }
                     BottomNavigationBar(navController = navController, currentRoute = currentRoute)
@@ -96,6 +99,9 @@ fun MainScreen(
                 playlists = playlists,
                 currentLyrics = currentLyrics,
                 activeLyricIndex = activeLyricIndex,
+                recentlyPlayed = recentlyPlayed,
+                mostPlayed = mostPlayed,
+                onShufflePlayAll = { homeViewModel.shuffleAndPlayAll() },
                 settingsViewModel = settingsViewModel,
                 onSongSelected = { homeViewModel.playSong(it) },
                 onOnlineSongSelected = { homeViewModel.playOnlineSong(it) },

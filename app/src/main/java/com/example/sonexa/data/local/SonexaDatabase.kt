@@ -5,23 +5,22 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-// 1. Added the two new entities and bumped version to 2
 @Database(
     entities = [
         FavoriteSongEntity::class,
         PlaylistEntity::class,
         PlaylistSongCrossRef::class,
-        SavedSongEntity::class
+        SavedSongEntity::class,
+        SongStatsEntity::class // 🚨 1. Added the new Stats Entity!
     ],
-    version = 3,
+    version = 4, // 🚨 2. Bumped version to 4!
     exportSchema = false
 )
 abstract class SonexaDatabase : RoomDatabase() {
 
     abstract fun favoriteDao(): FavoriteDao
-
-    // 2. Added the new Playlist DAO
     abstract fun playlistDao(): PlaylistDao
+    abstract fun songStatsDao(): SongStatsDao // 🚨 3. Added the new Stats DAO!
 
     companion object {
         @Volatile
@@ -34,8 +33,7 @@ abstract class SonexaDatabase : RoomDatabase() {
                     SonexaDatabase::class.java,
                     "sonexa_database"
                 )
-                    // 3. THIS LINE IS MANDATORY TO PREVENT CRASHES ON VERSION BUMP
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration() // Safely handles the version 4 upgrade
                     .build()
                 INSTANCE = instance
                 instance
