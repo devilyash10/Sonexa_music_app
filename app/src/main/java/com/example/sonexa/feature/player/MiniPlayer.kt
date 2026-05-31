@@ -195,7 +195,6 @@ fun MiniPlayer(
                     )
                 }
             }
-
             // CONTROLS
             IconButton(onClick = onPreviousClick, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Rounded.SkipPrevious, contentDescription = "Skip Previous", tint = contentColor)
