@@ -19,6 +19,7 @@ import com.example.sonexa.feature.search.SearchScreen
 import com.example.sonexa.model.Song
 import com.example.sonexa.core.util.LyricLine
 import com.example.sonexa.feature.settings.SettingsViewModel
+import com.example.sonexa.feature.splash.SplashScreen
 
 @Composable
 fun AppNavigation(
@@ -66,8 +67,18 @@ fun AppNavigation(
 ) {
     NavHost(
         navController = navController,
-        startDestination = Screen.Home.route
+        startDestination = Screen.Splash.route
     ) {
+        composable(Screen.Splash.route) {
+            SplashScreen(
+                onSplashFinished = {
+                    // Pops the splash screen off the backstack so the user can't hit the 'back' button to return to it
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Splash.route) { inclusive = true }
+                    }
+                }
+            )
+        }
         composable(Screen.Home.route) {
 
             // 🚨 3. BOTTOM SHEET STATE: Tracks which song is being added to a playlist

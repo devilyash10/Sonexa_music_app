@@ -1,26 +1,29 @@
 package com.example.sonexa.feature.player
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.sonexa.core.util.LyricLine
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LyricsScreen(
     lyrics: List<LyricLine>,
@@ -28,79 +31,88 @@ fun LyricsScreen(
     onBackClick: () -> Unit
 ) {
     val listState = rememberLazyListState()
+    val haptic = LocalHapticFeedback.current
 
-    // 1. THE AUTO-SCROLL ENGINE
-    // Whenever the activeLyricIndex changes, this block automatically runs!
+    // 🚨 THE SCROLL ENGINE: Automatically tracks the singing position
     LaunchedEffect(activeLyricIndex) {
-        if (activeLyricIndex >= 0 && lyrics.isNotEmpty()) {
-            // We subtract 3 so the active line stays near the center of the screen
-            val centerIndex = maxOf(0, activeLyricIndex - 3)
-            listState.animateScrollToItem(centerIndex)
+        if (activeLyricIndex >= 0 && activeLyricIndex < lyrics.size) {
+            // We subtract 2 so the active line sits perfectly in the middle/upper-middle of the screen
+            val targetIndex = maxOf(0, activeLyricIndex - 2)
+            listState.animateScrollToItem(targetIndex)
         }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF121212), // Deep dark gray
-                        Color.Black
-                    )
-                )
-            )
+            .background(Color.Black.copy(alpha = 0.85f)) // Premium dark glass backdrop
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .systemBarsPadding()
         ) {
-            // 2. TRANSPARENT TOP BAR
+            // --- HEADER ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp, horizontal = 24.dp),
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBackClick) {
-                    Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(36.dp))
-                }
                 Text(
                     text = "LYRICS",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = Color.White.copy(alpha = 0.5f),
                     letterSpacing = 2.sp
                 )
-                Spacer(modifier = Modifier.size(36.dp)) // Balances the UI
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onBackClick()
+                    },
+                    modifier = Modifier.background(Color.White.copy(alpha = 0.15f), shape = CircleShape)
+                ) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Close Lyrics", tint = Color.White)
+                }
             }
 
-            // 3. THE SCROLLING LYRICS
-            if (lyrics.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No lyrics available", color = Color.White.copy(alpha = 0.5f))
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 24.dp),
-                    contentPadding = PaddingValues(top = 40.dp, bottom = 200.dp),
-                    verticalArrangement = Arrangement.spacedBy(24.dp)
-                ) {
+            // --- THE LYRICS LIST ---
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 24.dp),
+                contentPadding = PaddingValues(top = 32.dp, bottom = 200.dp), // Extra bottom padding so the last lyric can scroll up
+                verticalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
+                if (lyrics.isEmpty()) {
+                    item {
+                        Text(
+                            text = "Lyrics not available for this track.",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                } else {
                     itemsIndexed(lyrics) { index, line ->
                         val isActive = index == activeLyricIndex
 
+                        // 🚨 SMOOTH ANIMATIONS: The text physically grows and glows when active
+                        val animatedColor by animateColorAsState(
+                            targetValue = if (isActive) Color.White else Color.White.copy(alpha = 0.3f),
+                            animationSpec = tween(500),
+                            label = "LyricColor"
+                        )
+
                         Text(
                             text = line.text,
-                            style = MaterialTheme.typography.headlineMedium,
+                            color = animatedColor,
+                            fontSize = if (isActive) 28.sp else 24.sp,
                             fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Bold,
-                            // Neon Cyan for active, faded white for inactive
-                            color = if (isActive) Color(0xFF00F0FF) else Color.White.copy(alpha = 0.3f),
-                            textAlign = TextAlign.Start,
+                            lineHeight = 34.sp,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

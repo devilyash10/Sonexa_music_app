@@ -1,6 +1,7 @@
 package com.example.sonexa.core.navigation
 
 sealed class Screen(val route: String) {
+    object Splash : Screen("splash")
     object Home : Screen("home")
     object Search : Screen("search")
     object Player : Screen("player")
