@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class OnlineViewModel : ViewModel() {
+
     private val repository = MusicRepository()
 
     private val _searchQuery = MutableStateFlow("")
@@ -25,17 +26,15 @@ class OnlineViewModel : ViewModel() {
 
     private var searchJob: Job? = null
 
-    // 🚨 FIX 1: Auto-fetch trending songs when the screen opens!
     init {
         viewModelScope.launch {
             _isLoading.value = true
-            // Searching "Hits" acts as a great workaround to get Global Top 50 tracks
-            _searchResults.value = repository.searchOnlineSongs("Hits")
+            // "English Top Songs" is a great default query for JioSaavn to return a solid home list
+            _searchResults.value = repository.searchOnlineSongs("English Top Songs")
             _isLoading.value = false
         }
     }
 
-    // This function automatically waits 500ms after the user stops typing before calling the API
     fun onSearchQueryChange(newQuery: String) {
         _searchQuery.value = newQuery
         searchJob?.cancel()
@@ -46,7 +45,7 @@ class OnlineViewModel : ViewModel() {
         }
 
         searchJob = viewModelScope.launch {
-            delay(500) // Debounce to prevent spamming the API
+            delay(500) // Debounce to prevent API rate limiting
             _isLoading.value = true
             _searchResults.value = repository.searchOnlineSongs(newQuery)
             _isLoading.value = false

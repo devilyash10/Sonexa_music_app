@@ -7,15 +7,19 @@ import retrofit2.http.Query
 
 interface MusicApiService {
 
-    // We hit the iTunes search endpoint, specifying we only want music tracks
-    @GET("search?media=music&entity=song")
+    // Searching the JioSaavn wrapper
+    @GET("api/search/songs")
     suspend fun searchOnlineSongs(
-        @Query("term") query: String,
+        @Query("query") query: String,
         @Query("limit") limit: Int = 20
-    ): ITunesResponse
+    ): JioSaavnResponse
 
     companion object {
-        private const val BASE_URL = "https://itunes.apple.com/"
+        // 🚨 THE FIX: The official, active production server for the JioSaavn open-source API
+        private const val BASE_URL = "https://saavn.sumit.co/"
+
+        // Backup Mirror (Keep this handy just in case!):
+        // private const val BASE_URL = "https://jiosaavn-api-sigma-sandy.vercel.app/"
 
         fun create(): MusicApiService {
             return Retrofit.Builder()

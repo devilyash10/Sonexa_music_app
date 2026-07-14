@@ -1,3 +1,5 @@
+@file:OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.example.sonexa.service
 
 import androidx.media3.common.Player
@@ -26,7 +28,17 @@ class AudioService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
-        player = ExoPlayer.Builder(this).build()
+        // 1. Define the AudioAttributes first so the OS knows this is high-priority Media/Music
+        val audioAttributes = androidx.media3.common.AudioAttributes.Builder()
+            .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+            .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
+            .build()
+
+        // 2. Build the player without the extra syntax error
+        player = ExoPlayer.Builder(this)
+            .setAudioAttributes(audioAttributes, true) // 🚨 true = Auto-handle Audio Focus!
+            .setHandleAudioBecomingNoisy(true) // Pauses if headphones are unplugged
+            .build()
 
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -46,7 +58,7 @@ class AudioService : MediaSessionService() {
                     val statsDao = database.songStatsDao()
                     val currentTimestamp = System.currentTimeMillis()
 
-                    // Check if a entry already exists for this song
+                    // Check if an entry already exists for this song
                     val existingStats = statsDao.getStatsForSong(currentMediaId)
 
                     if (existingStats == null) {
