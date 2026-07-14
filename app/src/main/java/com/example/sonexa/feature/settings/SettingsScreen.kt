@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.sonexa.service.AudioService
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +57,7 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
 
             // --- APPEARANCE SECTION ---
@@ -208,7 +211,7 @@ fun SettingsScreen(
                     // About Developer
                     ListItem(
                         headlineContent = { Text("About Sonexa", fontWeight = FontWeight.Bold) },
-                        supportingContent = { Text("v3.1.0 • Developer Info", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        supportingContent = { Text("v3.1.1 • Developer Info", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                         trailingContent = { Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = null) },
                         modifier = Modifier.clickable { onNavigateToAbout() },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent)

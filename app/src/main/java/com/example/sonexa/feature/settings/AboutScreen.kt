@@ -52,7 +52,7 @@ fun AboutScreen(onBackClick: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
             Text("Sonexa", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
-            Text("Version 3.1.0", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Version 3.1.1", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Spacer(modifier = Modifier.height(48.dp))
 
