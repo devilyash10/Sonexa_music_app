@@ -3,6 +3,8 @@ package com.example.sonexa.feature.home
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -41,16 +43,16 @@ import com.example.sonexa.feature.home.components.HorizontalSongSlider
 @Composable
 fun HomeScreen(
     songs: List<Song>,
-    recentlyPlayed: List<Song>, // 🚨 NEW: Injected from ViewModel
-    mostPlayed: List<Song>,     // 🚨 NEW: Injected from ViewModel
-    favoriteSongIds: List<Long>, // 🚨 NEW: To tint the hearts
-    onSongClick: (Song) -> Unit, // 🚨 Changed to pass the full Song object
+    recentlyPlayed: List<Song>,
+    mostPlayed: List<Song>,
+    favoriteSongIds: List<Long>,
+    onSongClick: (Song) -> Unit,
     onSearchClick: () -> Unit,
     onPermissionGranted: () -> Unit,
     onShufflePlayClick: () -> Unit,
     onNavigateToOnline: () -> Unit,
-    onToggleFavorite: (Song) -> Unit,       // 🚨 NEW: Quick Action
-    onAddToPlaylistClick: (Song) -> Unit    // 🚨 NEW: Quick Action
+    onToggleFavorite: (Song) -> Unit,
+    onAddToPlaylistClick: (Song) -> Unit
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -61,7 +63,21 @@ fun HomeScreen(
         Manifest.permission.READ_EXTERNAL_STORAGE
     }
 
-    val hasPermission = ContextCompat.checkSelfPermission(context, permissionToRequest) == PackageManager.PERMISSION_GRANTED
+    var hasPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, permissionToRequest) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    // 🚨 THE FIX: The actual Android System Permission Launcher
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasPermission = isGranted
+        if (isGranted) {
+            onPermissionGranted() // Triggers the ViewModel to finally load the songs
+        }
+    }
 
     LaunchedEffect(hasPermission) {
         if (hasPermission && songs.isEmpty()) {
@@ -73,7 +89,6 @@ fun HomeScreen(
     var sortOption by remember { mutableStateOf("A-Z") }
     var showSortMenu by remember { mutableStateOf(false) }
 
-    // Sort the list instantly in the UI layer
     val sortedSongs = remember(songs, sortOption) {
         when (sortOption) {
             "A-Z" -> songs.sortedBy { it.title }
@@ -116,7 +131,6 @@ fun HomeScreen(
                         letterSpacing = 1.sp
                     )
                 }
-
                 IconButton(
                     onClick = onSearchClick,
                     modifier = Modifier
@@ -153,7 +167,7 @@ fun HomeScreen(
             }
         }
 
-        // 3. 🚨 THE NEW DATABASE SLIDERS
+        // 3. DATABASE SLIDERS
         item {
             Column(modifier = Modifier.fillMaxWidth()) {
                 if (recentlyPlayed.isNotEmpty()) {
@@ -163,7 +177,6 @@ fun HomeScreen(
                         onSongClick = onSongClick
                     )
                 }
-
                 if (mostPlayed.isNotEmpty()) {
                     HorizontalSongSlider(
                         title = "Most Played",
@@ -189,9 +202,7 @@ fun HomeScreen(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Sorting Dropdown
                     Box {
                         IconButton(onClick = { showSortMenu = true }) {
                             Icon(
@@ -219,10 +230,7 @@ fun HomeScreen(
                             )
                         }
                     }
-
                     Spacer(modifier = Modifier.width(8.dp))
-
-                    // Shuffle Play
                     IconButton(
                         onClick = onShufflePlayClick,
                         modifier = Modifier
@@ -239,7 +247,7 @@ fun HomeScreen(
             }
         }
 
-        // 5. THE REAL LOCAL SONGS LIST
+        // 5. LOCAL SONGS LIST OR PERMISSION BUTTON
         if (sortedSongs.isEmpty()) {
             item {
                 Column(
@@ -250,7 +258,8 @@ fun HomeScreen(
                         Text("Permission required to access media.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
-                            onClick = onPermissionGranted,
+                            // 🚨 THE FIX: This now triggers the native Android pop-up!
+                            onClick = { permissionLauncher.launch(permissionToRequest) },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             Text("Scan Storage", color = MaterialTheme.colorScheme.onPrimary)
@@ -264,7 +273,7 @@ fun HomeScreen(
             items(sortedSongs) { song ->
                 LocalSongItem(
                     song = song,
-                    isFavorite = favoriteSongIds.contains(song.id), // 🚨 Check if it's liked!
+                    isFavorite = favoriteSongIds.contains(song.id),
                     onClick = { onSongClick(song) },
                     onFavoriteClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -280,8 +289,6 @@ fun HomeScreen(
         }
     }
 }
-
-// --- BEAUTIFUL UI COMPONENTS ---
 
 @Composable
 fun CloudCard(
@@ -311,10 +318,10 @@ fun CloudCard(
 @Composable
 fun LocalSongItem(
     song: Song,
-    isFavorite: Boolean, // 🚨 NEW
+    isFavorite: Boolean,
     onClick: () -> Unit,
-    onFavoriteClick: () -> Unit, // 🚨 NEW
-    onPlaylistClick: () -> Unit  // 🚨 NEW
+    onFavoriteClick: () -> Unit,
+    onPlaylistClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -342,7 +349,6 @@ fun LocalSongItem(
             Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
 
-        // 🚨 NEW: Quick-Action Menus right on the card!
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onFavoriteClick) {
                 Icon(

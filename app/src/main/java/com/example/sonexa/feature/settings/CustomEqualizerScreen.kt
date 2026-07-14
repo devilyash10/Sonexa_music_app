@@ -24,19 +24,26 @@ fun CustomEqualizerScreen(
     audioSessionId: Int,
     onBackClick: () -> Unit
 ) {
-    // 1. Initialize EQ
-    val equalizer = remember(audioSessionId) {
-        if (audioSessionId > 0) try { Equalizer(0, audioSessionId).apply { enabled = true } } catch (e: Exception) { null } else null
-    }
+    // 🚨 FIX: Safe Hardware Initialization with Memory Cleanup
+    var equalizer by remember { mutableStateOf<Equalizer?>(null) }
+    var bassBoost by remember { mutableStateOf<BassBoost?>(null) }
+    var virtualizer by remember { mutableStateOf<Virtualizer?>(null) }
 
-    // 2. Initialize Bass Boost Engine
-    val bassBoost = remember(audioSessionId) {
-        if (audioSessionId > 0) try { BassBoost(0, audioSessionId).apply { enabled = true } } catch (e: Exception) { null } else null
-    }
+    DisposableEffect(audioSessionId) {
+        val eq = if (audioSessionId > 0) try { Equalizer(0, audioSessionId).apply { enabled = true } } catch (e: Exception) { null } else null
+        val bass = if (audioSessionId > 0) try { BassBoost(0, audioSessionId).apply { enabled = true } } catch (e: Exception) { null } else null
+        val virt = if (audioSessionId > 0) try { Virtualizer(0, audioSessionId).apply { enabled = true } } catch (e: Exception) { null } else null
 
-    // 3. Initialize 3D Virtualizer (Clarity/Surround)
-    val virtualizer = remember(audioSessionId) {
-        if (audioSessionId > 0) try { Virtualizer(0, audioSessionId).apply { enabled = true } } catch (e: Exception) { null } else null
+        equalizer = eq
+        bassBoost = bass
+        virtualizer = virt
+
+        onDispose {
+            // 🚨 THIS PREVENTS THE CRASH: Safely unhooks from the hardware DSP when the screen closes
+            eq?.release()
+            bass?.release()
+            virt?.release()
+        }
     }
 
     val haptic = LocalHapticFeedback.current
@@ -71,15 +78,13 @@ fun CustomEqualizerScreen(
                     Text("Audio FX not supported on this device.", color = Color.Gray)
                 }
             } else {
-
-                // --- 🚨 NEW: BASS & 3D SURROUND DIALS ---
+                // --- MASTER EFFECTS ---
                 Text(
                     text = "MASTER EFFECTS",
                     style = MaterialTheme.typography.labelMedium,
                     color = primaryThemeColor,
                     modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
                 )
-
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     // BASS BOOST SLIDER
                     Surface(
@@ -126,6 +131,10 @@ fun CustomEqualizerScreen(
                     }
                 }
 
+                var activePreset by remember(equalizer) {
+                    mutableStateOf<Short?>(equalizer?.currentPreset)
+                }
+
                 // --- PRESETS ---
                 Text(
                     text = "PRESETS",
@@ -134,18 +143,33 @@ fun CustomEqualizerScreen(
                     modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
                 )
 
-                val numPresets = equalizer.numberOfPresets
+                val numPresets = equalizer?.numberOfPresets ?: 0
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+
+                    // NEW: Add a manual "Custom" chip
+                    item {
+                        FilterChip(
+                            selected = activePreset?.toInt() == -1,
+                            onClick = { }, // Does nothing, just a visual indicator
+                            label = { Text("Custom", fontWeight = if (activePreset?.toInt() == -1) FontWeight.Bold else FontWeight.Normal) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = primaryThemeColor.copy(alpha = 0.2f),
+                                selectedLabelColor = primaryThemeColor
+                            )
+                        )
+                    }
+
                     items(numPresets.toInt()) { i ->
                         val presetId = i.toShort()
-                        val presetName = equalizer.getPresetName(presetId)
-                        val isActive = equalizer.currentPreset == presetId
+                        val presetName = equalizer?.getPresetName(presetId) ?: "Preset $i"
+                        val isActive = activePreset == presetId // 🚨 Reacts instantly now!
 
                         FilterChip(
                             selected = isActive,
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                equalizer.usePreset(presetId)
+                                equalizer?.usePreset(presetId)
+                                activePreset = presetId // 🚨 Forces instant UI update
                                 refreshTrigger++
                             },
                             label = { Text(presetName, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal) },
@@ -167,15 +191,15 @@ fun CustomEqualizerScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                val numBands = equalizer.numberOfBands
-                val minEQLevel = equalizer.bandLevelRange[0]
-                val maxEQLevel = equalizer.bandLevelRange[1]
+                val numBands = equalizer?.numberOfBands ?: 0
+                val minEQLevel = equalizer?.bandLevelRange?.get(0) ?: 0
+                val maxEQLevel = equalizer?.bandLevelRange?.get(1) ?: 0
 
                 for (i in 0 until numBands) {
                     val band = i.toShort()
-                    val freq = equalizer.getCenterFreq(band) / 1000
+                    val freq = (equalizer?.getCenterFreq(band) ?: 0) / 1000
 
-                    var sliderValue by remember(refreshTrigger) { mutableFloatStateOf(equalizer.getBandLevel(band).toFloat()) }
+                    var sliderValue by remember(refreshTrigger) { mutableFloatStateOf((equalizer?.getBandLevel(band) ?: 0).toFloat()) }
                     var lastDbValue by remember(refreshTrigger) { mutableIntStateOf((sliderValue / 100).toInt()) }
 
                     Surface(
@@ -188,12 +212,12 @@ fun CustomEqualizerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(text = "${freq}Hz", fontWeight = FontWeight.Bold, modifier = Modifier.width(60.dp))
-
                             Slider(
                                 value = sliderValue,
                                 onValueChange = { newValue ->
                                     sliderValue = newValue
-                                    equalizer.setBandLevel(band, newValue.toInt().toShort())
+                                    equalizer?.setBandLevel(band, newValue.toInt().toShort())
+                                    activePreset = -1
 
                                     val currentDb = (newValue / 100).toInt()
                                     if (currentDb != lastDbValue) {
@@ -205,7 +229,6 @@ fun CustomEqualizerScreen(
                                 colors = SliderDefaults.colors(thumbColor = primaryThemeColor, activeTrackColor = primaryThemeColor, inactiveTrackColor = Color.DarkGray),
                                 modifier = Modifier.weight(1f).padding(horizontal = 16.dp)
                             )
-
                             val dbValue = (sliderValue / 100).toInt()
                             Text(
                                 text = if (dbValue > 0) "+${dbValue}dB" else "${dbValue}dB",

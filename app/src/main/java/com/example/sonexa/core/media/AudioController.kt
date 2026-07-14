@@ -9,17 +9,19 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.sonexa.model.Song
-import com.example.sonexa.service.AudioService // Importing your existing service!
+import com.example.sonexa.service.AudioService
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AudioController(private val context: Context) {
 
-    // 1. We replace ExoPlayer with a MediaController (The Remote Control)
     private var mediaControllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
 
-    // Grab the active session ID so our custom Equalizer can latch onto it!
     val audioSessionId: Int
         get() = AudioService.activeAudioSessionId
 
@@ -28,39 +30,50 @@ class AudioController(private val context: Context) {
     }
 
     private fun initController() {
-        // 2. We connect the Remote Control to the AudioService
         val sessionToken = SessionToken(context, ComponentName(context, AudioService::class.java))
         mediaControllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
 
-        // Wait for the connection to succeed
         mediaControllerFuture?.addListener({
             mediaController = mediaControllerFuture?.get()
         }, MoreExecutors.directExecutor())
     }
 
     fun playQueue(songs: List<Song>, startIndex: Int) {
-        // 3. We convert our Song data into ExoPlayer MediaItems AND Metadata
-        val mediaItems = songs.map { song ->
-            MediaItem.Builder()
-                .setMediaId(song.id.toString())
-                .setUri(song.mediaUri)
-                // THIS METADATA BUILDS THE LOCK SCREEN NOTIFICATION!
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(song.title)
-                        .setArtist(song.artist)
-                        .setArtworkUri(Uri.parse(song.artworkUri))
-                        .build()
-                )
-                .build()
-        }
+        // 🚨 FIX: Shift the heavy list mapping to a background CPU thread to prevent UI freezing
+        CoroutineScope(Dispatchers.Default).launch {
+            val mediaItems = songs.map { song ->
+                MediaItem.Builder()
+                    .setMediaId(song.id.toString())
+                    .setUri(song.mediaUri)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(song.title)
+                            .setArtist(song.artist)
+                            .setArtworkUri(Uri.parse(song.artworkUri))
+                            .build()
+                    )
+                    .build()
+            }
 
-        mediaController?.setMediaItems(mediaItems, startIndex, 0)
-        mediaController?.prepare()
-        mediaController?.play()
+            // Jump back to the Main thread to interact with the UI/ExoPlayer components
+            withContext(Dispatchers.Main) {
+                // 🚨 FIX: Race Condition handling. If controller is ready, play. If not, wait for it!
+                if (mediaController != null) {
+                    mediaController?.setMediaItems(mediaItems, startIndex, 0)
+                    mediaController?.prepare()
+                    mediaController?.play()
+                } else {
+                    mediaControllerFuture?.addListener({
+                        val controller = mediaControllerFuture?.get()
+                        controller?.setMediaItems(mediaItems, startIndex, 0)
+                        controller?.prepare()
+                        controller?.play()
+                    }, MoreExecutors.directExecutor())
+                }
+            }
+        }
     }
 
-    // All these methods now safely send commands to the background service!
     fun pause() = mediaController?.pause()
     fun resume() = mediaController?.play()
     fun skipToNext() = mediaController?.seekToNextMediaItem()
@@ -76,6 +89,7 @@ class AudioController(private val context: Context) {
     fun getRepeatMode() = mediaController?.repeatMode ?: Player.REPEAT_MODE_OFF
     fun getCurrentMediaId() = mediaController?.currentMediaItem?.mediaId
     fun getCurrentMediaItem() = mediaController?.currentMediaItem
+
     fun release() {
         mediaControllerFuture?.let { MediaController.releaseFuture(it) }
         mediaController = null

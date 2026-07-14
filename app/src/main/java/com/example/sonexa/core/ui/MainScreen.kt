@@ -34,7 +34,7 @@ fun MainScreen(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    val showBottomBar = currentRoute != Screen.Player.route
+    val showBottomBar = currentRoute != Screen.Player.route && currentRoute != Screen.Splash.route
 
     val songs by homeViewModel.songs.collectAsState()
     val isPlaying by homeViewModel.isPlaying.collectAsState()

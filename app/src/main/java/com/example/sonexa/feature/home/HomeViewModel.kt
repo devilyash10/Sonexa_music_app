@@ -1,7 +1,6 @@
 package com.example.sonexa.feature.home
 
 import android.app.Application
-import android.content.ContentUris
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sonexa.core.media.AudioController
@@ -22,31 +21,25 @@ import com.example.sonexa.data.local.PlaylistEntity
 import com.example.sonexa.data.local.PlaylistSongCrossRef
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import android.net.Uri
-import android.provider.MediaStore
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import com.example.sonexa.core.util.LyricLine
 import com.example.sonexa.core.util.LrcParser
 import com.example.sonexa.data.local.SavedSongEntity
 import com.example.sonexa.feature.settings.SettingsManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.Dispatchers
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val settingsManager = SettingsManager(application)
     private val repository = AudioRepository(application)
-
     private val audioController = AudioController(application)
 
-    // --- CENTRALIZED DATABASE INITIALIZATION ---
     private val database = SonexaDatabase.getDatabase(application)
     private val favoriteDao = database.favoriteDao()
     private val playlistDao = database.playlistDao()
-    private val songStatsDao = database.songStatsDao() // 🚨 NEW: Strike 2 Stats Engine
+    private val songStatsDao = database.songStatsDao()
 
-    // --- PLAYLISTS & FAVORITES ---
     val playlists: StateFlow<List<PlaylistEntity>> = playlistDao.getAllPlaylists()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -66,20 +59,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-
-    // --- MASTER SONG LISTS ---
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
     val songs: StateFlow<List<Song>> = _songs.asStateFlow()
 
-    // 🚨 NEW: RECENTLY PLAYED STATE FLOW
     private val _recentlyPlayed = MutableStateFlow<List<Song>>(emptyList())
     val recentlyPlayed: StateFlow<List<Song>> = _recentlyPlayed.asStateFlow()
 
-    // 🚨 NEW: MOST PLAYED STATE FLOW
     private val _mostPlayed = MutableStateFlow<List<Song>>(emptyList())
     val mostPlayed: StateFlow<List<Song>> = _mostPlayed.asStateFlow()
 
-    // --- SEARCH LOGIC ---
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -98,7 +86,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _searchQuery.value = newQuery
     }
 
-    // --- PLAYBACK STATES ---
     private val _currentSong = MutableStateFlow<Song?>(null)
     val currentSong: StateFlow<Song?> = _currentSong.asStateFlow()
 
@@ -138,26 +125,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             [00:50.00]I said, ooh, I'm blinded by the lights
             [00:55.50]No, I can't sleep until I feel your touch
         """.trimIndent()
-
         _currentLyrics.value = LrcParser.parse(mockLrc)
     }
 
     init {
-        // 1. Observe Settings
         viewModelScope.launch {
-            settingsManager.smartScanFlow.collectLatest { isSmartScanOn ->
-                loadLocalAudioFiles(isSmartScanOn)
+            settingsManager.smartScanFlow.collectLatest {
+                loadLocalAudioFiles()
             }
         }
 
-        // 2. 🚨 THE NEW LIVE COMBINATOR ENGINE FOR STATS
         viewModelScope.launch {
             combine(_songs, songStatsDao.getAllSongStats()) { masterList, statsList ->
                 Pair(masterList, statsList)
             }.collect { (masterList, statsList) ->
-
                 val statsMap = statsList.associateBy { it.mediaId }
-
                 _recentlyPlayed.value = masterList
                     .filter { statsMap.containsKey(it.id) && (statsMap[it.id]?.lastPlayedTimestamp ?: 0L) > 0L }
                     .sortedByDescending { statsMap[it.id]?.lastPlayedTimestamp ?: 0L }
@@ -170,14 +152,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 3. Start Player Loop
         updatePlaybackState()
     }
 
     private fun updatePlaybackState() {
         viewModelScope.launch {
             while (true) {
-                _isPlaying.value = audioController.isPlaying()
+                val currentlyPlaying = audioController.isPlaying()
+                _isPlaying.value = currentlyPlaying
+
+                // UI scrubber updates correctly if the user seeks while paused!
                 _currentPosition.value = audioController.getCurrentPosition()
                 _totalDuration.value = audioController.getDuration()
 
@@ -193,7 +177,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
                 val mediaId = audioController.getCurrentMediaId()
                 val mediaItem = audioController.getCurrentMediaItem()
-
                 if (mediaId != null && mediaItem != null) {
                     val songId = mediaId.toLongOrNull() ?: 0L
                     val localSong = _songs.value.find { it.id == songId }
@@ -207,88 +190,35 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     _currentSong.value = activeSong
                 }
 
-                delay(500L)
+                // Sleep for 500ms if playing for a smooth UI, or 1000ms if paused to save battery
+                delay(if (currentlyPlaying) 500L else 1000L)
             }
         }
     }
 
     fun loadLocalAudioFiles() {
-        viewModelScope.launch {
+        // 🚨 PERFORMANCE FIX 1: Move scanning to IO thread and utilize the Repository
+        viewModelScope.launch(Dispatchers.IO) {
             val isSmartScanOn = settingsManager.smartScanFlow.first()
-            loadLocalAudioFiles(isSmartScanOn)
-        }
-    }
+            val allSongs = repository.getAudioFiles()
 
-    private fun loadLocalAudioFiles(isSmartScanOn: Boolean) {
-        try {
-            val audioList = mutableListOf<Song>()
-            val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-
-            val projection = arrayOf(
-                MediaStore.Audio.Media._ID,
-                MediaStore.Audio.Media.TITLE,
-                MediaStore.Audio.Media.ARTIST,
-                MediaStore.Audio.Media.DURATION,
-                MediaStore.Audio.Media.RELATIVE_PATH,
-                MediaStore.Audio.Media.ALBUM_ID
-            )
-
-            val selectionClause = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-
-            val cursor = getApplication<Application>().contentResolver.query(
-                collection, projection, selectionClause, null, "${MediaStore.Audio.Media.TITLE} ASC"
-            )
-
-            cursor?.use {
-                val idColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-                val titleColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-                val artistColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-                val pathColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
-                val albumIdColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-
-                while (it.moveToNext()) {
-                    val id = it.getLong(idColumn)
-                    val title = it.getString(titleColumn) ?: "Unknown Title"
-                    val artist = it.getString(artistColumn) ?: "Unknown Artist"
-                    val relativePath = it.getString(pathColumn) ?: ""
-                    val albumId = it.getLong(albumIdColumn)
-
-                    if (isSmartScanOn) {
-                        val isJunk = relativePath.contains("WhatsApp", ignoreCase = true) ||
-                                relativePath.contains("Telegram", ignoreCase = true) ||
-                                relativePath.contains("Voice Recorder", ignoreCase = true) ||
-                                relativePath.contains("Snapchat", ignoreCase = true)
-                        if (isJunk) continue
-                    }
-
-                    val artworkUri = android.net.Uri.parse("content://media/external/audio/albumart")
-                        .buildUpon()
-                        .appendPath(albumId.toString())
-                        .build()
-                        .toString()
-
-                    val mediaUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
-
-                    audioList.add(
-                        Song(
-                            id = id,
-                            title = title,
-                            artist = artist,
-                            mediaUri = mediaUri.toString(),
-                            artworkUri = artworkUri
-                        )
-                    )
+            val filteredSongs = if (isSmartScanOn) {
+                allSongs.filterNot { song ->
+                    val path = song.mediaUri.lowercase()
+                    path.contains("whatsapp") ||
+                            path.contains("telegram") ||
+                            path.contains("voice recorder") ||
+                            path.contains("snapchat")
                 }
+            } else {
+                allSongs
             }
-            _songs.value = audioList
 
-        } catch (e: Exception) {
-            e.printStackTrace()
-            _songs.value = emptyList()
+            // Push the final clean list to the UI
+            _songs.value = filteredSongs
         }
     }
 
-    // --- PLAYER CONTROLS ---
     fun playSong(song: Song) {
         val currentSongs = _songs.value
         val startIndex = currentSongs.indexOf(song)
@@ -334,7 +264,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val isCurrentlyFavorite = favoriteSongIds.value.contains(song.id)
             val entity = FavoriteSongEntity(songId = song.id)
-
             if (isCurrentlyFavorite) {
                 favoriteDao.deleteFavorite(entity)
             } else {
@@ -358,7 +287,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- PLAYLIST CONTROLS ---
     fun createPlaylist(name: String) {
         if (name.isBlank()) return
         viewModelScope.launch {

@@ -7,30 +7,25 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Your custom Material 3 schema mapping values from Color.kt
+// 🚨 FIX: Properly closed the darkColorScheme block
 private val SonexaDarkScheme = darkColorScheme(
     primary = NeonCyan,
     onPrimary = OledBlack,
     primaryContainer = SurfaceVariantDark,
     onPrimaryContainer = NeonCyan,
-
     secondary = NeonPurple,
     onSecondary = TextPrimary,
-
     background = OledBlack,
     onBackground = TextPrimary,
-
     surface = DeepCharcoal,
     onSurface = TextPrimary,
-
     surfaceVariant = SurfaceDark,
     onSurfaceVariant = TextSecondary,
-
     error = ErrorRed,
     onError = TextPrimary
 )
 
-// Default baseline fallback light scheme
+// 🚨 FIX: Properly closed the lightColorScheme block
 private val SonexaLightScheme = lightColorScheme(
     primary = NeonCyan,
     background = Color.White,
@@ -58,7 +53,6 @@ fun SonexaTheme(
             onBackground = Color.White,
             onSurface = Color.White
         )
-        // 🚨 FIXED: Correctly reference your customized design tokens here
         darkTheme -> SonexaDarkScheme
         else -> SonexaLightScheme
     }
