@@ -1,6 +1,7 @@
 package com.example.sonexa.feature.settings
 
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,7 +28,9 @@ import com.example.sonexa.service.AudioService
 @Composable
 fun SettingsScreen(
     settingsViewModel: SettingsViewModel = viewModel(),
-    onNavigateToEqualizer: () -> Unit
+    onNavigateToEqualizer: () -> Unit,
+    onNavigateToAbout: () -> Unit,
+    onNavigateToPrivacy: () -> Unit
 ) {
     val isAmoledGold by settingsViewModel.isAmoledGoldEnabled.collectAsState()
     val isSmartScan by settingsViewModel.isSmartScanEnabled.collectAsState()
@@ -172,6 +175,52 @@ fun SettingsScreen(
                             settingsViewModel.toggleSmartScanner(it)
                         },
                         colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- ABOUT & ACCOUNT SECTION (Epic 14 Prep) ---
+            Text(
+                text = "ACCOUNT & ABOUT",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp)
+            )
+
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    // Sign In Stub
+                    ListItem(
+                        headlineContent = { Text("Sign In / Cloud Sync", fontWeight = FontWeight.Bold) },
+                        supportingContent = { Text("Requires authentication (Coming Soon)", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        trailingContent = { Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = null) },
+                        modifier = Modifier.clickable { /* Epic 14: Navigate to Auth Screen */ },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+
+                    // About Developer
+                    ListItem(
+                        headlineContent = { Text("About Sonexa", fontWeight = FontWeight.Bold) },
+                        supportingContent = { Text("v3.1.0 • Developer Info", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        trailingContent = { Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = null) },
+                        modifier = Modifier.clickable { onNavigateToAbout() },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+
+                    // Privacy Policy
+                    ListItem(
+                        headlineContent = { Text("Privacy Policy", fontWeight = FontWeight.Bold) },
+                        trailingContent = { Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = null) },
+                        modifier = Modifier.clickable { onNavigateToPrivacy() },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
                 }
             }

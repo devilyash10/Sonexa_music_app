@@ -17,6 +17,7 @@ class SettingsManager(context: Context) {
         // These are the exact "keys" used to look up your saved data
         val AMOLED_GOLD_KEY = booleanPreferencesKey("amoled_gold_enabled")
         val SMART_SCAN_KEY = booleanPreferencesKey("smart_scan_enabled")
+        val PRIVACY_POLICY_KEY = booleanPreferencesKey("privacy_policy_accepted")
     }
 
     // 1. READ THE DATA
@@ -38,6 +39,17 @@ class SettingsManager(context: Context) {
     suspend fun setSmartScan(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[SMART_SCAN_KEY] = enabled
+        }
+    }
+    // Read State
+    val privacyPolicyFlow: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[PRIVACY_POLICY_KEY] ?: false
+    }
+
+    // Write State
+    suspend fun setPrivacyPolicyAccepted(accepted: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PRIVACY_POLICY_KEY] = accepted
         }
     }
 }

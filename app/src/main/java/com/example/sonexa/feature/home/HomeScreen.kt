@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.*
@@ -112,21 +113,21 @@ fun HomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 8.dp),
+                    .padding(top = 16.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
                     Text(
-                        text = "SONEXA",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp,
+                        text = "Sonexa", // Title case looks much cleaner than ALL CAPS
+                        style = MaterialTheme.typography.displaySmall, // Punchier font
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = (-1).sp, // Tighter letter spacing feels modern
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "By Yash Bhadoriya",
-                        style = MaterialTheme.typography.labelLarge,
+                        text = "Music by Yash", // Subtler branding
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         letterSpacing = 1.sp
                     )
@@ -146,24 +147,46 @@ fun HomeScreen(
             }
         }
 
-        // 2. CLOUD GRID
+        // 2. SINGLE PREMIUM CLOUD BANNER
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(86.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(Color(0xFF8A2BE2), Color(0xFFFF2A6D)) // Purple to Pink
+                        )
+                    )
+                    .clickable { onNavigateToOnline() },
+                contentAlignment = Alignment.CenterStart
             ) {
-                CloudCard(
-                    title = "Cloud-streaming",
-                    gradientColors = listOf(Color(0xFF8A2BE2), Color(0xFF00F0FF)),
-                    modifier = Modifier.weight(1f),
-                    onClick = onNavigateToOnline
-                )
-                CloudCard(
-                    title = "Global Top 50",
-                    gradientColors = listOf(Color(0xFFFF2A6D), Color(0xFFFF7E67)),
-                    modifier = Modifier.weight(1f),
-                    onClick = onNavigateToOnline
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Public, // Use a globe icon
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Global Cloud Network",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Stream Top 50, Hits & More",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                }
             }
         }
 

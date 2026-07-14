@@ -70,10 +70,15 @@ fun AppNavigation(
         startDestination = Screen.Splash.route
     ) {
         composable(Screen.Splash.route) {
+            // Read the policy state
+            val hasAccepted by settingsViewModel.hasAcceptedPrivacyPolicy.collectAsState()
+
             SplashScreen(
                 onSplashFinished = {
-                    // Pops the splash screen off the backstack so the user can't hit the 'back' button to return to it
-                    navController.navigate(Screen.Home.route) {
+                    //  Intercept first-time users!
+                    val nextDestination = if (hasAccepted) Screen.Home.route else Screen.PrivacyPolicy.route
+
+                    navController.navigate(nextDestination) {
                         popUpTo(Screen.Splash.route) { inclusive = true }
                     }
                 }
@@ -223,13 +228,35 @@ fun AppNavigation(
         composable(Screen.Settings.route) {
             com.example.sonexa.feature.settings.SettingsScreen(
                 settingsViewModel = settingsViewModel,
-                onNavigateToEqualizer = { navController.navigate("custom_eq") }
+                onNavigateToEqualizer = { navController.navigate("custom_eq") },
+                onNavigateToAbout = { navController.navigate(Screen.About.route) },
+                onNavigateToPrivacy = { navController.navigate(Screen.PrivacyPolicy.route) }
             )
         }
 
         composable("custom_eq") {
             com.example.sonexa.feature.settings.CustomEqualizerScreen(
                 audioSessionId = com.example.sonexa.service.AudioService.activeAudioSessionId,
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.PrivacyPolicy.route) {
+            val hasAccepted by settingsViewModel.hasAcceptedPrivacyPolicy.collectAsState()
+            com.example.sonexa.feature.settings.PrivacyPolicyScreen(
+                isFirstLaunch = !hasAccepted,
+                onAcceptClick = {
+                    settingsViewModel.acceptPrivacyPolicy()
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.PrivacyPolicy.route) { inclusive = true }
+                    }
+                },
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.About.route) {
+            com.example.sonexa.feature.settings.AboutScreen(
                 onBackClick = { navController.popBackStack() }
             )
         }

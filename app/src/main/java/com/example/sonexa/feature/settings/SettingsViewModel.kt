@@ -20,6 +20,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val isSmartScanEnabled: StateFlow<Boolean> = settingsManager.smartScanFlow
         .stateIn(viewModelScope, SharingStarted.Lazily, true)
 
+
     // 2. Save the new state permanently when the switch is flipped
     fun toggleAmoledTheme(enabled: Boolean) {
         viewModelScope.launch {
@@ -30,6 +31,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleSmartScanner(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.setSmartScan(enabled)
+        }
+    }
+
+    // NEW
+    val hasAcceptedPrivacyPolicy: StateFlow<Boolean> = settingsManager.privacyPolicyFlow
+        .stateIn(viewModelScope, SharingStarted.Lazily, false)
+
+    // NEW
+    fun acceptPrivacyPolicy() {
+        viewModelScope.launch {
+            settingsManager.setPrivacyPolicyAccepted(true)
         }
     }
 }

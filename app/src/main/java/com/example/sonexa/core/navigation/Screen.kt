@@ -16,4 +16,8 @@ sealed class Screen(val route: String) {
             "playlist_detail/$id/${android.net.Uri.encode(name)}"
     }
     object Favorites : Screen("favorites")
+
+    object PrivacyPolicy : Screen("privacy_policy")
+    object About : Screen("about")
+    object SignIn : Screen("sign_in")
 }

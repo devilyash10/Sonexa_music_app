@@ -23,6 +23,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.sonexa.model.Song
+import androidx.compose.foundation.layout.padding
+
 
 @Composable
 fun HorizontalSongSlider(
@@ -35,41 +37,46 @@ fun HorizontalSongSlider(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp) // 🚨 Fixed typo here!
+            .padding(vertical = 12.dp)
     ) {
+        // 🚨 FIX: Replaced Color.White with adaptive onBackground
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.ExtraBold,
-            color = Color.White,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 12.dp)
+
         )
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp), // slightly wider gap for breathing room
             modifier = Modifier.fillMaxWidth()
         ) {
             items(songs) { song ->
                 Column(
+                    // 🚨 FIX: Increased width slightly so text isn't as squished
                     modifier = Modifier
-                        .width(120.dp)
+                        .width(130.dp)
                         .clickable { onSongClick(song) },
                     horizontalAlignment = Alignment.Start
                 ) {
                     // Artwork Display Block
                     Box(
                         modifier = Modifier
-                            .size(120.dp)
+                            .size(130.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.MusicNote,
                             contentDescription = null,
-                            tint = Color.Gray.copy(alpha = 0.5f),
-                            modifier = Modifier.size(36.dp)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(40.dp)
                         )
                         AsyncImage(
                             model = song.artworkUri,
@@ -79,23 +86,25 @@ fun HorizontalSongSlider(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Title
+                    // 🚨 FIX: Replaced Color.White with adaptive onSurface
                     Text(
                         text = song.title,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
 
                     // Artist
+                    // 🚨 FIX: Replaced Color.Gray with adaptive onSurfaceVariant
                     Text(
                         text = song.artist,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
